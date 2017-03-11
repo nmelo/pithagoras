@@ -1,7 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/nmelo/pithagoras/pkg/blue"
+)
 
 func main() {
-	fmt.Println("Test")
+	fmt.Println("starting pithagoras")
+	blue.Connect()
 }
