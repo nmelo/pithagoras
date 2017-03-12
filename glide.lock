@@ -1,8 +1,15 @@
 hash: 6d14aca6053463e099c5a581773f6df9761f8de4b8fdb50dbca4c21cbd3be01a
-updated: 2017-03-12T13:22:31.990413838-04:00
+updated: 2017-03-12T13:43:03.137661593-04:00
 imports:
 - name: github.com/boltdb/bolt
   version: 583e8937c61f1af6513608ccc75c97b6abdf4ff9
+- name: github.com/op/go-logging
+  version: 970db520ece77730c7e4724c61121037378659d9
+- name: github.com/skycoin/skycoin
+  version: 3aaaa11cbfa26f3dcfd0fc556781f9dc226f14d7
+  subpackages:
+  - src/aether/wifi
+  - src/aether/wifi/linux
 - name: golang.org/x/sys
   version: e4594059fe4cde2daf423055a596c2cd1e6c9adf
   subpackages:
