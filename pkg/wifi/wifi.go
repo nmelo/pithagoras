@@ -1,26 +1,17 @@
 package wifi
 
 import (
-	"bytes"
 	"fmt"
-	"log"
-	"os/exec"
-	"strings"
+
+	"github.com/skycoin/skycoin/src/aether/wifi"
 )
 
-type Wifi struct {
-	Name string
-}
-
-func GetList() []Wifi {
-	cmd := exec.Command("iw", "dev", "wlan0", "scan")
-	cmd.Stdin = strings.NewReader("")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
+func PrintList() {
+	ifaces, err := network.NewWifiInterfaces()
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("getting interfaces: %s", err)
 	}
-	fmt.Printf("Wifis: %q\n", out.String())
-	return nil
+	for _, v := range ifaces {
+		fmt.Println(v.Name)
+	}
 }
