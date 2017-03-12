@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	logging "github.com/op/go-logging"
 )
@@ -18,7 +19,7 @@ import (
 var (
 	DataDir = ""
 
-	logger = MustGetLogger("util")
+	logger = logging.MustGetLogger("util")
 )
 
 // Disables the logger completely
@@ -135,10 +136,6 @@ func ResolveResourceDirectory(path string) string {
 	rt_directory := filepath.Dir(rt_filename)
 
 	path_abs, err := filepath.Abs(path)
-	if err != nil {
-		log.Panic(err)
-	}
-	fmt.Println("abs path:", path_abs)
 
 	fmt.Printf("runtime.Caller= %s \n", rt_filename)
 	//fmt.Printf("Filepath Raw= %s \n")
@@ -188,27 +185,28 @@ func ResolveResourceDirectory(path string) string {
 func DetermineResourcePath(staticDir string, resourceDir string, devDir string) (string, error) {
 	//check "dev" directory first
 	appLoc := filepath.Join(staticDir, devDir)
-	// if !strings.HasPrefix(appLoc, "/") {
-	// 	// Prepend the binary's directory path if appLoc is relative
-	// 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	// 	if err != nil {
-	// 		return "", err
-	// 	}
+	if !strings.HasPrefix(appLoc, "/") {
+		// Prepend the binary's directory path if appLoc is relative
+		dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+		if err != nil {
+			return "", err
+		}
 
-	// 	appLoc = filepath.Join(dir, appLoc)
-	// }
+		appLoc = filepath.Join(dir, appLoc)
+	}
+
 	if _, err := os.Stat(appLoc); os.IsNotExist(err) {
 		//check dist directory
 		appLoc = filepath.Join(staticDir, resourceDir)
-		// if !strings.HasPrefix(appLoc, "/") {
-		// 	// Prepend the binary's directory path if appLoc is relative
-		// 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-		// 	if err != nil {
-		// 		return "", err
-		// 	}
+		if !strings.HasPrefix(appLoc, "/") {
+			// Prepend the binary's directory path if appLoc is relative
+			dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+			if err != nil {
+				return "", err
+			}
 
-		// 	appLoc = filepath.Join(dir, appLoc)
-		// }
+			appLoc = filepath.Join(dir, appLoc)
+		}
 
 		if _, err := os.Stat(appLoc); os.IsNotExist(err) {
 			return "", err

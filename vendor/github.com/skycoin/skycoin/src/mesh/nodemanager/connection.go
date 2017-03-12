@@ -1,118 +1,219 @@
 package nodemanager
 
 import (
+	"fmt"
+	"os"
+	"time"
+
+	uuid "github.com/satori/go.uuid"
 	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/mesh/errors"
-	"github.com/skycoin/skycoin/src/mesh/messages"
+	"github.com/skycoin/skycoin/src/mesh/domain"
+	"github.com/skycoin/skycoin/src/mesh/node"
+	"github.com/skycoin/skycoin/src/mesh/serialize"
 )
+
+type IConnection interface {
+	SendData([]byte) error
+	SetOutputChannel(chan []byte)
+}
 
 type Connection struct {
-	id             messages.ConnectionId
-	nm             *NodeManager
-	status         uint8
-	nodeAttached   cipher.PubKey
-	routeId        messages.RouteId
-	backRouteId    messages.RouteId
-	closingChannel chan bool
-	sequence       uint32
+	Node                   *mesh.Node
+	ConnectedPeerID        cipher.PubKey
+	Route                  *domain.Route
+	Output                 chan []byte
+	Serializer             *serialize.Serializer
+	MessagesBeingAssembled map[domain.MessageID]*domain.MessageUnderAssembly
+	TimeToAssembleMessage  time.Duration
+	ExpireMessagesInterval time.Duration
+
+	closing chan bool
 }
 
-const (
-	DISCONNECTED = iota
-	CONNECTED
-)
-
-func (nm *NodeManager) NewConnectionWithRoutes(nodeAttached cipher.PubKey, routeId, backRouteId messages.RouteId) (messages.Connection, error) {
-	conn, err := newConnection(nm, nodeAttached)
-	if err != nil {
-		return nil, err
+func NewConnection(node *mesh.Node, peerID cipher.PubKey) IConnection {
+	connection := &Connection{
+		Node:                   node,
+		ConnectedPeerID:        peerID,
+		Serializer:             serialize.NewSerializer(),
+		MessagesBeingAssembled: make(map[domain.MessageID]*domain.MessageUnderAssembly),
+		TimeToAssembleMessage:  2 * time.Second,
+		closing:                make(chan bool, 10),
 	}
-	conn.routeId = routeId
-	conn.backRouteId = backRouteId
-	conn.status = CONNECTED
-	return conn, nil
+
+	connection.Serializer.RegisterMessageForSerialization(serialize.MessagePrefix{1}, domain.UserMessage{})
+	connection.Serializer.RegisterMessageForSerialization(serialize.MessagePrefix{2}, domain.SetRouteMessage{})
+	connection.Serializer.RegisterMessageForSerialization(serialize.MessagePrefix{3}, domain.RefreshRouteMessage{})
+	connection.Serializer.RegisterMessageForSerialization(serialize.MessagePrefix{4}, domain.DeleteRouteMessage{})
+	connection.Serializer.RegisterMessageForSerialization(serialize.MessagePrefix{5}, domain.SetRouteReply{})
+	connection.Serializer.RegisterMessageForSerialization(serialize.MessagePrefix{6}, domain.AddNodeMessage{})
+
+	go connection.expireOldMessagesLoop()
+
+	return connection
 }
 
-func (nm *NodeManager) NewConnection(nodeAttached, nodeTo cipher.PubKey) (messages.Connection, error) {
-	conn, err := newConnection(nm, nodeAttached)
-	if err != nil {
-		return nil, err
+func (self *Connection) SendData(data []byte) error {
+	userMessages := self.FragmentMessage(data)
+	for _, userMessage := range userMessages {
+		serializedMessage := self.SerializeMessage(userMessage)
+		err := self.Node.SendMessageThruRoute(self.Route.ForwardToRouteID, serializedMessage)
+		if err != nil {
+			return err
+		}
 	}
-	routeId, backRouteId, err := nm.findRoute(nodeAttached, nodeTo)
-	if err != nil {
-		return nil, err
-	}
-	conn.routeId = routeId
-	conn.backRouteId = backRouteId
-	conn.status = CONNECTED
-	return conn, nil
+	return nil
 }
 
-func newConnection(nm *NodeManager, nodeAttached cipher.PubKey) (*Connection, error) {
-	id := messages.RandConnectionId()
-	_, err := nm.getNodeById(nodeAttached)
-	if err != nil {
-		return nil, err
+func (self *Connection) FragmentMessage(contents []byte) []domain.UserMessage {
+	messageBase := domain.MessageBase{
+		SendRouteID: self.Route.ForwardToRouteID,
+		SendBack:    false,
+		FromPeerID:  self.Node.Config.PubKey,
+		Nonce:       mesh.GenerateNonce(),
 	}
-	conn := &Connection{
-		id:           id,
-		nm:           nm,
-		status:       DISCONNECTED,
-		nodeAttached: nodeAttached,
+
+	fragmentsBuf := make([]domain.UserMessage, 0)
+	maxContentLength := self.GetMaximumContentLength()
+	fmt.Fprintf(os.Stdout, "MaxContentLength: %v\n", maxContentLength)
+	remainingBytes := contents[:]
+	messageID := (domain.MessageID)(uuid.NewV4())
+	for len(remainingBytes) > 0 {
+		nBytesThisMessage := min(maxContentLength, (uint64)(len(remainingBytes)))
+		bytesThisMessage := remainingBytes[:nBytesThisMessage]
+		remainingBytes = remainingBytes[nBytesThisMessage:]
+		message := domain.UserMessage{
+			MessageBase: messageBase,
+			MessageID:   messageID,
+			Index:       (uint64)(len(fragmentsBuf)),
+			Count:       0,
+			Contents:    bytesThisMessage,
+		}
+		fragmentsBuf = append(fragmentsBuf, message)
 	}
-	conn.closingChannel = make(chan bool)
-	return conn, nil
+	fragments := make([]domain.UserMessage, 0)
+	for _, message := range fragmentsBuf {
+		message.Count = (uint64)(len(fragmentsBuf))
+		fragments = append(fragments, message)
+	}
+	fmt.Fprintf(os.Stdout, "Message fragmented in %v packets.\n", len(fragments))
+	return fragments
 }
 
-func (self *Connection) Send(msg []byte) (uint32, error) {
+// Returns nil if reassembly didn't happen (incomplete message)
+func (self *Connection) ReassembleMessage(msgIn domain.UserMessage) []byte {
 
-	//	messages.RegisterEvent("Conn.Send start")
-
-	if self.status != CONNECTED {
-
-		//		messages.RegisterEvent("Conn.Send return (DISCONNECT)")
-
-		return 0, errors.ERR_DISCONNECTED
+	_, assembledExists := self.MessagesBeingAssembled[msgIn.MessageID]
+	if !assembledExists {
+		beingAssembled := &domain.MessageUnderAssembly{
+			Fragments:   make(map[uint64]domain.UserMessage),
+			SendRouteID: msgIn.SendRouteID,
+			SendBack:    msgIn.SendBack,
+			Count:       msgIn.Count,
+			Dropped:     false,
+			ExpiryTime:  time.Now().Add(self.TimeToAssembleMessage),
+		}
+		self.MessagesBeingAssembled[msgIn.MessageID] = beingAssembled
 	}
-	requestMessage := messages.RequestMessage{
-		BackRoute: self.backRouteId,
-		Sequence:  self.sequence,
-		Payload:   msg,
+
+	beingAssembled, _ := self.MessagesBeingAssembled[msgIn.MessageID]
+
+	if beingAssembled.Dropped {
+		return nil
 	}
 
-	//	messages.RegisterEvent("conn.Send serializing")
-
-	requestSerialized := messages.Serialize(messages.MsgRequestMessage, requestMessage)
-
-	//	messages.RegisterEvent("conn.Send serialized")
-
-	inRouteMessage := messages.InRouteMessage{
-		messages.NIL_TRANSPORT,
-		self.routeId,
-		requestSerialized,
+	if beingAssembled.Count != msgIn.Count {
+		fmt.Fprintf(os.Stderr, "Fragments of message %v have different total counts!\n", msgIn.MessageID)
+		beingAssembled.Dropped = true
+		return nil
 	}
-	//	msgSerialized := messages.Serialize(messages.MsgInRouteMessage, inRouteMessage)
-	node, err := self.nm.getNodeById(self.nodeAttached)
-	if err != nil {
 
-		//		messages.RegisterEvent("Conn.Send return (No Node By ID)")
-
-		return 0, err
+	if beingAssembled.SendRouteID != msgIn.SendRouteID {
+		fmt.Fprintf(os.Stderr, "Fragments of message %v have different send ids!\n", msgIn.SendRouteID)
+		beingAssembled.Dropped = true
+		return nil
 	}
-	//	messages.RegisterEvent("Conn.Send passes to InjectTransportMesage")
-	node.InjectTransportMessage(&inRouteMessage)
-	self.sequence++
 
-	//	messages.RegisterEvent("Conn.Send return (SUCCESS)")
+	if beingAssembled.SendBack != msgIn.SendBack {
+		fmt.Fprintf(os.Stderr, "Fragments of message %v have different send directions!\n", msgIn.SendRouteID)
+		beingAssembled.Dropped = true
+		return nil
+	}
 
-	return self.sequence - 1, nil
+	_, messageExists := beingAssembled.Fragments[msgIn.Index]
+	if messageExists {
+		fmt.Fprintf(os.Stderr, "Fragment %v of message %v is duplicated, dropping message\n", msgIn.Index, msgIn.MessageID)
+		return nil
+	}
+
+	beingAssembled.Fragments[msgIn.Index] = msgIn
+	if (uint64)(len(beingAssembled.Fragments)) == beingAssembled.Count {
+		delete(self.MessagesBeingAssembled, msgIn.MessageID)
+		reassembled := []byte{}
+		for i := (uint64)(0); i < beingAssembled.Count; i++ {
+			reassembled = append(reassembled, beingAssembled.Fragments[i].Contents...)
+		}
+		return reassembled
+	}
+
+	return nil
 }
 
-func (self *Connection) GetStatus() uint8 {
-	return self.status
+func (self *Connection) SetOutputChannel(output chan []byte) {
+	self.Output = output
 }
 
-func (self *Connection) Close() {
-	//close(self.closingChannel)
-	self.status = DISCONNECTED
+func (self *Connection) DeserializeMessage(msg []byte) (interface{}, error) {
+	return self.Serializer.UnserializeMessage(msg)
+}
+
+func (self *Connection) SerializeMessage(msg interface{}) []byte {
+	return self.Serializer.SerializeMessage(msg)
+}
+
+func (self *Connection) expireOldMessages() {
+	timeNow := time.Now()
+
+	lastMessages := self.MessagesBeingAssembled
+	self.MessagesBeingAssembled = make(map[domain.MessageID]*domain.MessageUnderAssembly)
+	for messageID, message := range lastMessages {
+		if timeNow.Before(message.ExpiryTime) {
+			self.MessagesBeingAssembled[messageID] = message
+		}
+	}
+}
+
+func (self *Connection) expireOldMessagesLoop() {
+	for len(self.closing) == 0 {
+		select {
+		case <-time.After(self.ExpireMessagesInterval):
+			{
+				self.expireOldMessages()
+			}
+		case <-self.closing:
+			{
+				return
+			}
+		}
+	}
+}
+
+func (self *Connection) Close() error {
+	for i := 0; i < 10; i++ {
+		self.closing <- true
+	}
+	return nil
+}
+
+// WTF
+func (self *Connection) GetMaximumContentLength() uint64 {
+	empty := domain.UserMessage{}
+	emptySerialized := self.Serializer.SerializeMessage(empty)
+	return self.Node.GetMaximumContentLength(self.ConnectedPeerID, emptySerialized)
+}
+
+func min(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
 }

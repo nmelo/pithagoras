@@ -1,22 +1,17 @@
 'use strict'
 
-const { app, Menu, BrowserWindow, dialog } = require('electron');
-
-var log = require('electron-log');
+global.eval = function() { throw new Error('bad!!'); }
 
 const path = require('path');
 
-const childProcess = require('child_process');
-
-const cwd = require('process').cwd();
+const electron = require('electron');
 
 // This adds refresh and devtools console keybindings
 // Page can refresh with cmd+r, ctrl+r, F5
 // Devtools can be toggled with cmd+alt+i, ctrl+shift+i, F12
 require('electron-debug')({ enabled: true, showDevTools: false });
 
-
-global.eval = function() { throw new Error('bad!!'); }
+const { app } = electron;
 
 const defaultURL = 'http://127.0.0.1:6420/';
 let currentURL;
@@ -25,7 +20,20 @@ let currentURL;
 app.commandLine.appendSwitch('host-rules', 'MAP * 127.0.0.1');
 app.commandLine.appendSwitch('ssl-version-fallback-min', 'tls1.2');
 app.commandLine.appendSwitch('--no-proxy-server');
+// app.commandLine.appendSwitch('cipher-suite-blacklist', '');
+
 app.setAsDefaultProtocolClient('skycoin');
+
+// Module to create native browser window.
+const { BrowserWindow } = electron;
+
+const { dialog } = electron;
+
+const childProcess = require('child_process');
+
+const cwd = require('process').cwd();
+
+console.log('working directory: ' + cwd);
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -33,8 +41,32 @@ let win;
 
 var skycoin = null;
 
+// function logExec(cmd, args) {
+//     console.log('exec: ' + cmd);
+//     var ps = childProcess.exec(cmd, args, (error) => {
+//         if (error) {
+//             console.log(error);
+//             throw error
+//         }
+//     });
+//     ps.stdout.on('data', (data) => {
+//         console.log(data.toString());
+//     });
+//     ps.stderr.on('data', (data) => {
+//         console.log(data.toString());
+//     });
+//     return ps;
+// }
+
+// logExec('ls');
+
 function startSkycoin() {
     console.log('Starting skycoin from electron');
+
+    // console.log('=====\n\n');
+    // // console.log(app.getPath('app'));
+    // console.log(app.getPath('skycoin'));
+    // console.log('\n\n=====');
 
     if (skycoin) {
         console.log('Skycoin already running');
@@ -62,7 +94,6 @@ function startSkycoin() {
                 return './resources/app/skycoin';
         }
     })()
-
     var args = [
         '-launch-browser=false',
         '-gui-dir=' + path.dirname(exe),
@@ -72,6 +103,7 @@ function startSkycoin() {
         // '-web-interface-https=true',
     ]
 
+
     skycoin = childProcess.spawn(exe, args);
 
     skycoin.on('error', (e) => {
@@ -80,7 +112,6 @@ function startSkycoin() {
     });
 
     skycoin.stdout.on('data', (data) => {
-        // log.info(data.toString());
         console.log(data.toString());
 
         // Scan for the web URL string
@@ -92,31 +123,27 @@ function startSkycoin() {
         if (i === -1) {
             return
         }
-        // var j = data.indexOf('\n', i);
+        var j = data.indexOf('\n', i);
 
-        // // dialog.showErrorBox('index of newline: ', j);
-        // if (j === -1) {
-        //     throw new Error('web interface url log line incomplete');
-        // }
-        // var url = data.slice(i + marker.length, j);
-        // currentURL = url.toString();
-        currentURL = defaultURL;
+        // dialog.showErrorBox('index of newline: ', j);
+        if (j === -1) {
+            throw new Error('web interface url log line incomplete');
+        }
+        var url = data.slice(i + marker.length, j);
+        currentURL = url.toString();
         app.emit('skycoin-ready', { url: currentURL });
     });
 
     skycoin.stderr.on('data', (data) => {
-        // log.info(data.toString());
         console.log(data.toString());
     });
 
     skycoin.on('close', (code) => {
-        // log.info('Skycoin closed');
         console.log('Skycoin closed');
         reset();
     });
 
     skycoin.on('exit', (code) => {
-        // log.info('Skycoin exited');
         console.log('Skycoin exited');
         reset();
     });
@@ -154,29 +181,6 @@ function createWindow(url) {
         // when you should delete the corresponding element.
         win = null;
     });
-
-    // create application's main menu
-    var template = [{
-        label: "Skycoin",
-        submenu: [
-            { label: "About Skycoin", selector: "orderFrontStandardAboutPanel:" },
-            { type: "separator" },
-            { label: "Quit", accelerator: "Command+Q", click: function() { app.quit(); } }
-        ]
-    }, {
-        label: "Edit",
-        submenu: [
-            { label: "Undo", accelerator: "CmdOrCtrl+Z", selector: "undo:" },
-            { label: "Redo", accelerator: "Shift+CmdOrCtrl+Z", selector: "redo:" },
-            { type: "separator" },
-            { label: "Cut", accelerator: "CmdOrCtrl+X", selector: "cut:" },
-            { label: "Copy", accelerator: "CmdOrCtrl+C", selector: "copy:" },
-            { label: "Paste", accelerator: "CmdOrCtrl+V", selector: "paste:" },
-            { label: "Select All", accelerator: "CmdOrCtrl+A", selector: "selectAll:" }
-        ]
-    }];
-
-    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 // Enforce single instance

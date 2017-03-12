@@ -1,10 +1,12 @@
 package daemon
 
 import (
+	"log"
 	"time"
 
 	//"github.com/skycoin/skycoin/src/daemon/gnet"
 	"github.com/skycoin/skycoin/src/daemon/gnet"
+	"github.com/skycoin/skycoin/src/util"
 )
 
 type PoolConfig struct {
@@ -64,7 +66,7 @@ func (self *Pool) Init(d *Daemon) {
 	cfg.Address = self.Config.address
 	cfg.ConnectCallback = d.onGnetConnect
 	cfg.DisconnectCallback = d.onGnetDisconnect
-	// cfg.EventChannelSize = cfg.EventChannelSize
+	cfg.EventChannelSize = cfg.EventChannelSize
 	pool := gnet.NewConnectionPool(cfg, d)
 	self.Pool = pool
 }
@@ -72,28 +74,40 @@ func (self *Pool) Init(d *Daemon) {
 // Closes all connections and stops listening
 func (self *Pool) Shutdown() {
 	if self.Pool != nil {
-		self.Pool.Shutdown()
+		self.Pool.StopListen()
 		logger.Info("Shutdown pool")
 	}
 }
 
 // Starts listening on the configured Port
 // no goroutine
-func (self *Pool) Start() {
-	self.Pool.Run()
+func (self *Pool) StartListen() {
+	if err := self.Pool.StartListen(); err != nil {
+		log.Panic(err)
+	}
 }
 
 // Accepts connections, run in goroutine
-// func (self *Pool) AcceptConnections() {
-// 	self.Pool.AcceptConnections()
-// }
+func (self *Pool) AcceptConnections() {
+	self.Pool.AcceptConnections()
+}
 
 // Send a ping if our last message sent was over pingRate ago
-func (pool *Pool) sendPings() {
-	pool.Pool.SendPings(pool.Config.PingRate, &PingMessage{})
+func (self *Pool) sendPings() {
+	now := util.Now()
+	for _, c := range self.Pool.Pool {
+		if c.LastSent.Add(self.Config.PingRate).Before(now) {
+			self.Pool.SendMessage(c, &PingMessage{})
+		}
+	}
 }
 
 // Removes connections that have not sent a message in too long
 func (self *Pool) clearStaleConnections() {
-	self.Pool.ClearStaleConnections(self.Config.IdleLimit, DisconnectIdle)
+	now := util.Now()
+	for _, c := range self.Pool.Pool {
+		if c.LastReceived.Add(self.Config.IdleLimit).Before(now) {
+			self.Pool.Disconnect(c, DisconnectIdle)
+		}
+	}
 }

@@ -17,6 +17,8 @@ import (
 
 func setupVisorWriting(vc VisorConfig) *Visor {
 	vc.WalletDirectory = testWalletDir
+	vc.BlockSigsFile = testBlocksigsFile
+	vc.BlockchainFile = testBlockchainFile
 	v := NewVisor(vc)
 	v.Wallets[0].SetFilename(testWalletFile)
 	cleanupVisor() // delete the automatically saved wallet
@@ -118,7 +120,7 @@ func addValidTxns(t *testing.T, v *Visor, n int) coin.Transactions {
 	return txns
 }
 
-func addSignedBlockAt(t *testing.T, v *Visor, when uint64) coin.SignedBlock {
+func addSignedBlockAt(t *testing.T, v *Visor, when uint64) SignedBlock {
 	we := wallet.NewWalletEntry()
 	tx, err := v.Spend(v.Wallets[0].GetFilename(), wallet.Balance{1e6, 0}, 0, we.Address)
 	assert.Nil(t, err)
@@ -135,11 +137,11 @@ func addSignedBlockAt(t *testing.T, v *Visor, when uint64) coin.SignedBlock {
 	return sb
 }
 
-func addSignedBlock(t *testing.T, v *Visor) coin.SignedBlock {
+func addSignedBlock(t *testing.T, v *Visor) SignedBlock {
 	return addSignedBlockAt(t, v, uint64(util.UnixNow()))
 }
 
-func addSignedBlocks(t *testing.T, v *Visor, n int) []coin.SignedBlock {
+func addSignedBlocks(t *testing.T, v *Visor, n int) []SignedBlock {
 	sbs := make([]SignedBlock, n)
 	now := uint64(util.UnixNow())
 	for i := 0; i < n; i++ {
@@ -148,7 +150,7 @@ func addSignedBlocks(t *testing.T, v *Visor, n int) []coin.SignedBlock {
 	return sbs
 }
 
-func assertSignedBlocks(t *testing.T, v *Visor, sbs []coin.SignedBlock,
+func assertSignedBlocks(t *testing.T, v *Visor, sbs []SignedBlock,
 	start, ct uint64) {
 	have := v.HeadBkSeq()
 	if have <= start {
@@ -167,14 +169,14 @@ func assertSignedBlocks(t *testing.T, v *Visor, sbs []coin.SignedBlock,
 }
 
 func assertReadableBlocks(t *testing.T, v *Visor, rbs []ReadableBlock,
-	sbs []coin.SignedBlock) {
+	sbs []SignedBlock) {
 	assert.Equal(t, len(rbs), len(sbs))
 	for i, rb := range rbs {
 		assertReadableBlock(t, rb, sbs[i].Block)
 	}
 }
 
-func assertBlocks(t *testing.T, v *Visor, bs []coin.Block, sbs []coin.SignedBlock) {
+func assertBlocks(t *testing.T, v *Visor, bs []coin.Block, sbs []SignedBlock) {
 	assert.Equal(t, len(bs), len(sbs))
 	for i, b := range bs {
 		assert.Equal(t, b, sbs[i].Block)
@@ -347,7 +349,7 @@ func TestNewMinimalVisor(t *testing.T) {
 	assert.Equal(t, len(v.blockSigs.Sigs), 0)
 }
 
-func TestCreateGenesisBlockVisor(t *testing.T) {
+func TestCreateGenesisBlock(t *testing.T) {
 	defer cleanupVisor()
 	// Test as master, successful
 	vc := newMasterVisorConfig(t)

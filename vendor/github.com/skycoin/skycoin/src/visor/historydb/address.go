@@ -21,9 +21,14 @@ func newAddressUx(db *bolt.DB, name []byte) (*addressUx, error) {
 	return &addressUx{bkt}, nil
 }
 
-// create address affected UxOuts bucket.
-func newAddressUxBkt(db *bolt.DB) (*addressUx, error) {
+// create address with received UxOuts bucket.
+func newAddressInBkt(db *bolt.DB) (*addressUx, error) {
 	return newAddressUx(db, []byte("address_in"))
+}
+
+// create address with spent UxOUts bucket.
+func newAddressOutBkt(db *bolt.DB) (*addressUx, error) {
+	return newAddressUx(db, []byte("address_out"))
 }
 
 // Get return nil on not found.

@@ -7,11 +7,6 @@ import {Observer} from 'rxjs/Observer';
 import 'rxjs/add/operator/map';
 import 'rxjs/add/operator/catch';
 import {QRCodeComponent} from './ng2-qrcode';
-import {SkyCoinEditComponent} from './components/skycoin.edit.component';
-import {SeedComponent} from './components/seed.component';
-import {SkyCoinOutputComponent} from './components/outputs.component';
-import {SeedService} from "./services/seed.service";
-import {Wallet} from './model/wallet.pojo'
 
 declare var _: any;
 declare var $: any;
@@ -67,7 +62,7 @@ export class PagerService {
 
 @Component({
     selector: 'load-wallet',
-    directives: [ROUTER_DIRECTIVES, QRCodeComponent, SeedComponent, SkyCoinEditComponent, SkyCoinOutputComponent],
+    directives: [ROUTER_DIRECTIVES, QRCodeComponent],
     providers: [PagerService],
     templateUrl: 'app/templates/wallet.html'
 })
@@ -85,27 +80,11 @@ export class LoadWalletComponent implements OnInit {
     displayModeEnum = DisplayModeEnum;
     selectedMenu: string;
 
-    userTransactions:Array<any>;
-
-    @ViewChild(SkyCoinOutputComponent)
-    private outputComponent: SkyCoinOutputComponent;
-
-    @ViewChild('spendaddress')
-    private spendAddress:any;
-
-    @ViewChild('spendamount')
-    private spendAmount:any;
-
-    @ViewChild('transactionNote')
-        private transactionNote:any;
-
     QrAddress: string;
     QrIsVisible: boolean;
 
-    @ViewChild(SeedComponent)
-    private seedComponent: SeedComponent;
-
     NewWalletIsVisible: boolean;
+    EditWalletIsVisible: boolean;
     loadSeedIsVisible: boolean;
 
     walletname: string;
@@ -117,13 +96,13 @@ export class LoadWalletComponent implements OnInit {
     connections: Array<any>;
     defaultConnections: Array<any>;
     blockChain: any;
-    numberOfBlocks: number;
     outputs: Array<any>;
     NewDefaultConnectionIsVisible : boolean;
     EditDefaultConnectionIsVisible : boolean;
     oldConnection:string;
     filterAddressVal:string;
     totalSky:any;
+    randomWords:any;
     historySearchKey:string;
     selectedWallet:any;
 
@@ -152,24 +131,24 @@ export class LoadWalletComponent implements OnInit {
         this.displayMode = DisplayModeEnum.first;
         this.totalSky = 0;
         this.selectedWallet = {};
-        this.userTransactions=[];
         this.loadWallet();
         this.loadConnections();
         this.loadDefaultConnections();
         this.loadBlockChain();
-        this.loadNumberOfBlocks();
         this.loadProgress();
+        this.loadOutputs();
+        this.loadTransactions();
         this.isValidAddress = false;
         this.blockViewMode = 'recentBlocks'
 
         //Set interval function for load wallet every 15 seconds
         setInterval(() => {
             this.loadWallet();
+            //console.log("Refreshing balance");
         }, 30000);
         setInterval(() => {
             this.loadConnections();
             this.loadBlockChain();
-            this.loadNumberOfBlocks();
             //console.log("Refreshing connections");
         }, 15000);
 
@@ -217,82 +196,6 @@ export class LoadWalletComponent implements OnInit {
         }
         this.readyDisable = true;
         this.sendDisable = false;
-    }
-
-    loadNumberOfBlocks(){
-        this.numberOfBlocks=0;
-        this.http.get('/blockchain/metadata')
-            .map((res:Response)=>res.json())
-            .subscribe(
-                data=>{
-                    this.numberOfBlocks = data.head.seq;
-                }
-            )
-    }
-
-    loadTransactionsForWallet(){
-        let addresses=[];
-        _.each(this.wallets,(wallet)=>{
-            _.each(wallet.entries,(entry)=>{
-                addresses.push(entry.address);
-            });
-        });
-
-        this.userTransactions=[];
-
-        var transactionData=[];
-
-        var self = this;
-
-        this.http.get('/lastTxs', {})
-            .map((res) => res.json())
-            .subscribe(transactions => {
-                _.each(transactions,(transaction)=>{
-                    //with each transaction that we have grab all the outputs and check if the outputs is pointing
-                    // to any of the current addresses.If yes then hold it.
-                    _.each(transaction.txn.outputs,(output)=>{
-                        if(addresses.indexOf(output.dst)>0){
-                            transactionData.push({'type':'confirmed','transactionInputs':transaction.txn.inputs,'transactionOutputs':transaction.txn.outputs
-                            ,'actualTransaction':transaction.txn
-                            });
-                        }
-                    });
-
-
-                });
-
-                this.userTransactions = _.uniq(transactionData,'actualTransaction.txId');
-            }, err => console.log("Error on load transactions: " + err), () => {
-
-            });
-
-
-        this.http.get('/pendingTxs', {})
-            .map((res) => res.json())
-            .subscribe(transactions => {
-
-                _.each(transactions,(transaction)=>{
-                    //with each transaction that we have grab all the outputs and check if the outputs is pointing
-                    // to any of the current addresses.If yes then hold it.
-
-                    _.each(transaction.transaction.outputs,(output)=>{
-                        if(addresses.indexOf(output.dst)>0){
-
-                            transactionData.push({'type':'pending','transactionInputs':transaction.transaction.inputs,'transactionOutputs':transaction.transaction.outputs
-                                ,'actualTransaction':transaction.transaction
-                            });
-
-                        }
-                    });
-                });
-                this.userTransactions = _.uniq(transactionData,'actualTransaction.txId');
-            }, err => console.log("Error on pending transactions: " + err), () => {
-
-            });
-
-
-
-
     }
 
     //Load wallet function
@@ -351,8 +254,6 @@ export class LoadWalletComponent implements OnInit {
                             });
                         });
                     });
-
-                    this.loadTransactionsForWallet();
 
                 },
                 err => console.log(err),
@@ -443,7 +344,7 @@ export class LoadWalletComponent implements OnInit {
     }
     GetTransactionAmount(transaction) {
       var ret = 0;
-      _.each(transaction.outputs, function(o){
+      _.each(transaction.txn.outputs, function(o){
         ret += Number(o.coins);
       })
 
@@ -487,7 +388,20 @@ export class LoadWalletComponent implements OnInit {
               //console.log('Default connections load done')
             });
     }
-
+    loadOutputs() {
+        var headers = new Headers();
+        headers.append('Content-Type', 'application/x-www-form-urlencoded');
+        this.http.get('/outputs', { headers: headers })
+            .map((res) => res.json())
+            .subscribe(data => {
+                this.outputs = _.sortBy(data, function(o){
+                    return o.address;
+                });
+                this.outputs.length = Math.min(100, this.outputs.length);
+            }, err => console.log("Error on load outputs: " + err), () => {
+              //console.log('Connection load done')
+            });
+    }
     loadBlockChain() {
         var headers = new Headers();
         headers.append('Content-Type', 'application/x-www-form-urlencoded');
@@ -539,11 +453,6 @@ export class LoadWalletComponent implements OnInit {
         this.displayMode = this.displayModeEnum.fifth;
         event.preventDefault();
         this.selectedMenu = menu;
-        if(menu=='Outputs'){
-            if(this.outputComponent){
-                this.outputComponent.refreshOutputs();
-            }
-        }
     }
     getDateTimeString(ts) {
         return moment.unix(ts).format("YYYY-MM-DD HH:mm")
@@ -552,8 +461,8 @@ export class LoadWalletComponent implements OnInit {
         return moment().unix() - ts;
     }
     //Show QR code function for show QR popup
-    showQR(address){
-        this.QrAddress = address;
+    showQR(wallet){
+        this.QrAddress = wallet.entries[0].address;
         this.QrIsVisible = true;
     }
     //Hide QR code function for hide QR popup
@@ -564,6 +473,7 @@ export class LoadWalletComponent implements OnInit {
     //Show wallet function for view New wallet popup
     showNewWalletDialog(){
         this.NewWalletIsVisible = true;
+        this.randomWords = this.getRandomWords();
     }
     //Hide wallet function for hide New wallet popup
     hideWalletPopup(){
@@ -620,9 +530,7 @@ export class LoadWalletComponent implements OnInit {
         //Set http headers
         var headers = new Headers();
         headers.append('Content-Type', 'application/x-www-form-urlencoded');
-        if(this.seedComponent){
-            seed=this.seedComponent.getCurrentSeed();
-        }
+
         //Post method executed
         var stringConvert = 'label='+label+'&seed='+seed;
         this.http.post('/wallet/create', stringConvert, {headers: headers})
@@ -678,6 +586,11 @@ export class LoadWalletComponent implements OnInit {
             );
     }
 
+    //Edit existing wallet function
+    editWallet(wallet){
+        this.EditWalletIsVisible = true;
+        this.walletId = wallet.meta.filename;
+    }
     addNewAddress(wallet) {
       //Set http headers
       var headers = new Headers();
@@ -699,6 +612,45 @@ export class LoadWalletComponent implements OnInit {
               },
               () => {}
           );
+    }
+    //Hide edit wallet function
+    hideEditWalletPopup(){
+        this.EditWalletIsVisible = false;
+    }
+
+    //Update wallet function for update wallet label
+    updateWallet(walletid, walletName){
+      console.log("update wallet", walletid, walletName);
+        //check if label is duplicated
+        var old = _.find(this.wallets, function(o){
+          return (o.meta.label == walletName)
+        })
+
+        if(old) {
+            toastr.error("This wallet label is used already");
+          return;
+        }
+
+        //Set http headers
+        var headers = new Headers();
+        headers.append('Content-Type', 'application/x-www-form-urlencoded');
+        var stringConvert = 'label='+walletName+'&id='+walletid;
+        //Post method executed
+        this.http.post('/wallet/update', stringConvert, {headers: headers})
+            .map((res:Response) => res.json())
+            .subscribe(
+                response => {
+                    //Hide new wallet popup
+                    this.EditWalletIsVisible = false;
+                    toastr.info("Wallet updated successfully");
+                    //Load wallet for refresh list
+                    this.loadWallet();
+                },
+                err => console.log("Error on update wallet: "+JSON.stringify(err)),
+                () => {
+                  //console.log('Update wallet done')
+                }
+            );
     }
 
     //Load wallet seed function
@@ -777,23 +729,6 @@ export class LoadWalletComponent implements OnInit {
       this.filterAddressVal = address;
     }
 
-    updateStatusOfTransaction(txid, metaData){
-        var headers = new Headers();
-        headers.append('Content-Type', 'application/x-www-form-urlencoded');
-        this.http.get('/transaction?txid=' + txid, { headers: headers })
-            .map((res) => res.json())
-            .subscribe(
-                //Response from API
-                res => {
-                    this.pendingTable.push({'time':res.txn.timestamp,'status':res.status.confirmed?'Completed':'Unconfirmed','amount':metaData.amount,'txId':txid,'address':metaData.address});
-                    //Load wallet for refresh list
-                    this.loadWallet();
-                }, err => {
-                    console.log("Error on load transaction: " + err)
-                }, () => {
-                });
-    }
-
     spend(spendid, spendaddress, spendamount){
         var amount = Number(spendamount);
         if(amount < 1) {
@@ -820,24 +755,21 @@ export class LoadWalletComponent implements OnInit {
         headers.append('Content-Type', 'application/x-www-form-urlencoded');
         var stringConvert = 'id='+spendid+'&coins='+spendamount*1000000+"&fee=1&hours=1&dst="+spendaddress;
         //Post method executed
-        var self = this;
         this.http.post('/wallet/spend', stringConvert, {headers: headers})
             .map((res:Response) => res.json())
             .subscribe(
                 response => {
                     console.log(response);
-                    this.updateStatusOfTransaction(response.txn.txid, {address:spendaddress,amount:amount});
+                    response.txn.time = Date.now()/1000;
+                    response.txn.address = spendaddress;
+                    response.txn.amount = spendamount;
+                    this.pendingTable.push(response);
+                    //Load wallet for refresh list
+                    this.loadWallet();
                     this.readyDisable = false;
                     this.sendDisable = true;
-                    self.spendAddress.nativeElement.value = '';
-                    self.spendAmount.nativeElement.value =0;
-                    self.transactionNote.nativeElement.value = '';
-                    self.isValidAddress=false;
                 },
                 err => {
-
-
-
                     this.readyDisable = false;
                     this.sendDisable = true;
                     var logBody = err._body;
@@ -855,10 +787,7 @@ export class LoadWalletComponent implements OnInit {
                     //this.pendingTable.push({complete: 'Pending', address: spendaddress, amount: spendamount});
                 },
                 () => {
-                    self.spendAddress.nativeElement.value = '';
-                    self.spendAmount.nativeElement.value =0;
-                    self.transactionNote.nativeElement.value = '';
-                    self.isValidAddress=false;
+                  //console.log('Spend successfully')
                   $("#send_pay_to").val("");
                   $("#send_amount").val(0);
                 }
@@ -904,6 +833,36 @@ export class LoadWalletComponent implements OnInit {
     searchBlockHistory(searchKey){
       console.log(searchKey);
 
+    }
+
+    getRandomWords() {
+      var ret = [];
+      for(var i = 0 ; i < 11; i++) {
+        var length = Math.round(Math.random() * 10);
+        length = Math.max(length, 3);
+
+        ret.push(this.createRandomWord(length));
+      }
+
+      return ret.join(" ");
+    }
+
+    createRandomWord(length) {
+      var consonants = 'bcdfghjklmnpqrstvwxyz',
+          vowels = 'aeiou',
+          rand = function(limit) {
+              return Math.floor(Math.random()*limit);
+          },
+          i, word='',
+          consonants2 = consonants.split(''),
+          vowels2 = vowels.split('');
+      for (i=0;i<length/2;i++) {
+          var randConsonant = consonants2[rand(consonants.length)],
+              randVowel = vowels2[rand(vowels.length)];
+          word += (i===0) ? randConsonant.toUpperCase() : randConsonant;
+          word += i*2<length-1 ? randVowel : '';
+      }
+      return word;
     }
 
     onSelectWallet(val) {

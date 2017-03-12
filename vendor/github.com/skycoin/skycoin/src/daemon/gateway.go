@@ -5,26 +5,22 @@ import (
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/visor"
 	//"github.com/skycoin/skycoin/src/wallet"
-	"time"
-
 	"github.com/skycoin/skycoin/src/visor/historydb"
 )
 
 // Exposes a read-only api for use by the gui rpc interface
 
-// GatewayConfig configuration set of gateway.
 type GatewayConfig struct {
 	BufferSize int
 }
 
-// NewGatewayConfig create and init an GatewayConfig
 func NewGatewayConfig() GatewayConfig {
 	return GatewayConfig{
 		BufferSize: 32,
 	}
 }
 
-// Gateway RPC interface wrapper for daemon state
+// RPC interface wrapper for daemon state
 type Gateway struct {
 	Config GatewayConfig
 	Daemon RPC
@@ -40,7 +36,6 @@ type Gateway struct {
 	// Responses chan interface{}
 }
 
-// NewGateway create and init an Gateway instance.
 func NewGateway(c GatewayConfig, D *Daemon) *Gateway {
 	return &Gateway{
 		Config:   c,
@@ -80,26 +75,6 @@ func (gw *Gateway) GetConnection(addr string) interface{} {
 	return <-conn
 }
 
-// GetTrustConnections returns all trusted connections,
-// including private and public
-func (gw *Gateway) GetTrustConnections() interface{} {
-	conn := make(chan interface{})
-	gw.Requests <- func() {
-		conn <- gw.Daemon.GetTrustConnections(gw.D)
-	}
-	return <-conn
-}
-
-// GetExchgConnection returns all exchangeable connections,
-// including private and public
-func (gw *Gateway) GetExchgConnection() interface{} {
-	conn := make(chan interface{})
-	gw.Requests <- func() {
-		conn <- gw.Daemon.GetAllExchgConnections(gw.D)
-	}
-	return <-conn
-}
-
 /* Blockchain & Transaction status */
 //DEPRECATE
 
@@ -122,7 +97,7 @@ func (gw *Gateway) ResendTransaction(txn cipher.SHA256) interface{} {
 	return <-result
 }
 
-// GetBlockchainMetadata returns a *visor.BlockchainMetadata
+// Returns a *visor.BlockchainMetadata
 func (gw *Gateway) GetBlockchainMetadata() interface{} {
 	bcm := make(chan interface{})
 	gw.Requests <- func() {
@@ -136,21 +111,6 @@ func (gw *Gateway) GetBlocks(start, end uint64) *visor.ReadableBlocks {
 	blocks := make(chan *visor.ReadableBlocks)
 	gw.Requests <- func() {
 		blocks <- gw.Visor.GetBlocks(gw.V, start, end)
-	}
-	return <-blocks
-}
-
-// GetBlocksInDepth returns blocks in different depth
-func (gw *Gateway) GetBlocksInDepth(vs []uint64) *visor.ReadableBlocks {
-	blocks := make(chan *visor.ReadableBlocks)
-	gw.Requests <- func() {
-		blks := visor.ReadableBlocks{}
-		for _, n := range vs {
-			if b := gw.Visor.GetBlockInDepth(gw.V, n); b != nil {
-				blks.Blocks = append(blks.Blocks, *b)
-			}
-		}
-		blocks <- &blks
 	}
 	return <-blocks
 }
@@ -170,71 +130,47 @@ func (gw *Gateway) GetLastBlocks(num uint64) *visor.ReadableBlocks {
 	return <-blocks
 }
 
-// OutputsFilter used as optional arguments in GetUnspentOutputs method
-type OutputsFilter func(outputs []visor.ReadableOutput) []visor.ReadableOutput
-
-// GetUnspentOutputs gets unspent outputs and returns the filtered results,
-// Note: all filters will be executed as the pending sequence in 'AND' mode.
-func (gw *Gateway) GetUnspentOutputs(filters ...OutputsFilter) visor.ReadableOutputSet {
-	allOutputs := make(chan []visor.ReadableOutput)
-	spendingOutputs := make(chan []visor.ReadableOutput)
-	inOutputs := make(chan []visor.ReadableOutput)
+// GetUnspentByAddrs gets unspent of specific addresses
+func (gw *Gateway) GetUnspentByAddrs(addrs []string) []visor.ReadableOutput {
+	outputs := make(chan []visor.ReadableOutput)
 	gw.Requests <- func() {
-		allOutputs <- gw.V.GetUnspentOutputReadables()
-		spendingOutputs <- gw.V.AllSpendsOutputs()
-		inOutputs <- gw.V.AllIncommingOutputs()
-	}
-	allOuts := <-allOutputs
-	spendingOuts := <-spendingOutputs
-	inOuts := <-inOutputs
-
-	for _, flt := range filters {
-		allOuts = flt(allOuts)
-		spendingOuts = flt(spendingOuts)
-		inOuts = flt(inOuts)
-	}
-
-	return visor.ReadableOutputSet{
-		HeadOutputs:      allOuts,
-		OutgoingOutputs:  spendingOuts,
-		IncommingOutputs: inOuts,
-	}
-}
-
-// FbyAddresses filters the unspent outputs that owned by the addresses
-func FbyAddresses(addrs []string) OutputsFilter {
-	return func(outputs []visor.ReadableOutput) []visor.ReadableOutput {
+		outs := gw.V.GetUnspentOutputReadables()
 		addrMatch := []visor.ReadableOutput{}
 		addrMap := make(map[string]bool)
 		for _, addr := range addrs {
 			addrMap[addr] = true
 		}
 
-		for _, u := range outputs {
+		for _, u := range outs {
 			if _, ok := addrMap[u.Address]; ok {
 				addrMatch = append(addrMatch, u)
 			}
 		}
-		return addrMatch
+		outputs <- addrMatch
 	}
+	return <-outputs
 }
 
-// FbyHashes filters the unspent outputs that have hashes matched.
-func FbyHashes(hashes []string) OutputsFilter {
-	return func(outputs []visor.ReadableOutput) []visor.ReadableOutput {
+// GetUnspentByHashes gets unspent of specific unspent hashes.
+func (gw *Gateway) GetUnspentByHashes(hashes []string) []visor.ReadableOutput {
+	outputs := make(chan []visor.ReadableOutput)
+	gw.Requests <- func() {
+		outs := gw.V.GetUnspentOutputReadables()
+
 		hsMatch := []visor.ReadableOutput{}
 		hsMap := make(map[string]bool)
 		for _, h := range hashes {
 			hsMap[h] = true
 		}
 
-		for _, u := range outputs {
+		for _, u := range outs {
 			if _, ok := hsMap[u.Hash]; ok {
 				hsMatch = append(hsMatch, u)
 			}
 		}
-		return hsMatch
+		outputs <- hsMatch
 	}
+	return <-outputs
 }
 
 // GetTransaction gets transaction by txid.
@@ -263,7 +199,7 @@ func (gw *Gateway) InjectTransaction(txn coin.Transaction) (coin.Transaction, er
 	return tx, err
 }
 
-// GetAddressTransactions returns a *visor.TransactionResults
+// Returns a *visor.TransactionResults
 func (gw *Gateway) GetAddressTransactions(a cipher.Address) interface{} {
 	tx := make(chan interface{})
 	gw.Requests <- func() {
@@ -272,8 +208,7 @@ func (gw *Gateway) GetAddressTransactions(a cipher.Address) interface{} {
 	return <-tx
 }
 
-// GetUxOutByID gets UxOut by hash id.
-func (gw *Gateway) GetUxOutByID(id cipher.SHA256) (*historydb.UxOutJSON, error) {
+func (gw *Gateway) GetUxOutByID(id cipher.SHA256) (*historydb.UxOut, error) {
 	var uxout *historydb.UxOut
 	var err error
 	c := make(chan struct{})
@@ -282,44 +217,33 @@ func (gw *Gateway) GetUxOutByID(id cipher.SHA256) (*historydb.UxOutJSON, error) 
 		c <- struct{}{}
 	}
 	<-c
-	return historydb.NewUxOutJSON(uxout), err
+	return uxout, err
 }
 
-// GetAddrUxOuts gets all the address affected UxOuts.
-func (gw *Gateway) GetAddrUxOuts(addr cipher.Address) ([]*historydb.UxOutJSON, error) {
+func (gw *Gateway) GetRecvUxOutOfAddr(addr cipher.Address) ([]*historydb.UxOut, error) {
 	var (
 		uxouts []*historydb.UxOut
 		err    error
 	)
 	c := make(chan struct{})
 	gw.Requests <- func() {
-		uxouts, err = gw.V.GetAddrUxOuts(addr)
-		c <- struct{}{}
-	}
-	<-c
-	uxs := make([]*historydb.UxOutJSON, len(uxouts))
-	for i, ux := range uxouts {
-		uxs[i] = historydb.NewUxOutJSON(ux)
-	}
-	return uxs, err
-}
-
-// GetAddrUxOuts gets all the address affected UxOuts.
-func (gw *Gateway) GetAddressUxOuts(addr cipher.Address) ([]*historydb.UxOut, error) {
-	var (
-		uxouts []*historydb.UxOut
-		err    error
-	)
-	c := make(chan struct{})
-	gw.Requests <- func() {
-		uxouts, err = gw.V.GetAddrUxOuts(addr)
+		uxouts, err = gw.V.GetRecvUxOutOfAddr(addr)
 		c <- struct{}{}
 	}
 	<-c
 	return uxouts, err
 }
 
-// GetTimeNow returns the current Unix time
-func (gw *Gateway) GetTimeNow() uint64 {
-	return uint64(time.Now().Unix())
+func (gw *Gateway) GetSpentUxOutOfAddr(addr cipher.Address) ([]*historydb.UxOut, error) {
+	var (
+		outputs []*historydb.UxOut
+		err     error
+	)
+	c := make(chan struct{})
+	gw.Requests <- func() {
+		outputs, err = gw.V.GetSpentUxOutOfAddr(addr)
+		c <- struct{}{}
+	}
+	<-c
+	return outputs, err
 }

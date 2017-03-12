@@ -7,17 +7,10 @@ SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 pushd "${SCRIPTDIR}"
 
-if [[ "$OSTYPE" == "linux"* ]]; then
-    tar cvf "${SRC_TAR}" --owner=0 --group=0 --exclude=electron \
-        --exclude=node_modules --exclude=_deprecated --exclude='.[^/\.]*' \
-        "../src" "../cmd" "../run.sh" "../test.sh" "../README.md" \
-        >/dev/null
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    tar cvf "${SRC_TAR}" --exclude=electron \
-        --exclude=node_modules --exclude=_deprecated --exclude='.[^/\.]*' \
-        "../src" "../cmd" "../run.sh" "../test.sh" "../README.md" \
-        >/dev/null
-fi
+tar cvf "${SRC_TAR}" --owner=0 --group=0 --exclude=electron \
+    --exclude=node_modules --exclude=_deprecated --exclude='.[^/\.]*' \
+    "../src" "../cmd" "../run.sh" "../test.sh" "../GLOCKFILE" "../README.md" \
+    >/dev/null
 
 popd >/dev/null
 

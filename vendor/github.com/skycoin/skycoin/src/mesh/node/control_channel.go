@@ -1,45 +1,37 @@
-package node
+package mesh
 
 import (
-	"github.com/skycoin/skycoin/src/mesh/errors"
-	"github.com/skycoin/skycoin/src/mesh/messages"
+	"reflect"
+
+	"github.com/satori/go.uuid"
+	"github.com/skycoin/skycoin/src/mesh/domain"
 )
 
 type ControlChannel struct {
-	id messages.ChannelId
+	ID uuid.UUID
 }
 
-func newControlChannel() *ControlChannel {
+func NewControlChannel() *ControlChannel {
 	c := ControlChannel{
-		id: messages.RandChannelId(),
+		ID: uuid.NewV4(),
 	}
 	return &c
 }
 
-func (c *ControlChannel) handleMessage(handledNode *Node, msg []byte) error {
-	switch messages.GetMessageType(msg) {
-	case messages.MsgAddRouteControlMessage:
-		var m1 messages.AddRouteControlMessage
-		err := messages.Deserialize(msg, &m1)
-		if err != nil {
-			panic(err)
-		}
-		routeRule := RouteRule{
-			m1.IncomingTransportId,
-			m1.OutgoingTransportId,
-			m1.IncomingRouteId,
-			m1.OutgoingRouteId,
-		}
-		err = handledNode.addRoute(&routeRule)
-		return err
+func (c *ControlChannel) HandleMessage(node *Node, message interface{}) error {
 
-	case messages.MsgRemoveRouteControlMessage:
-		var m1 messages.RemoveRouteControlMessage
-		messages.Deserialize(msg, &m1)
-		routeId := m1.RouteId
-		err := handledNode.removeRoute(routeId)
-		return err
+	messageType := reflect.TypeOf(message)
+
+	if messageType == reflect.TypeOf(domain.SetRouteControlMessage{}) {
+		err := processSetRouteMessage(node, message.(domain.SetRouteControlMessage))
+		if err != nil {
+			return err
+		}
 	}
 
-	return errors.ERR_UNKNOWN_MESSAGE_TYPE
+	return nil
+}
+
+func processSetRouteMessage(node *Node, message domain.SetRouteControlMessage) error {
+	return node.AddRoute(message.ForwardRouteID, message.ForwardPeerID)
 }

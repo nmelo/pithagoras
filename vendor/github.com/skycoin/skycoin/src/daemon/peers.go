@@ -3,8 +3,6 @@ package daemon
 import (
 	"time"
 
-	"os"
-
 	"github.com/skycoin/skycoin/src/daemon/pex"
 )
 
@@ -63,31 +61,23 @@ func NewPeers(c PeersConfig) *Peers {
 //read file, write, if does not exist
 var DefaultConnections = []string{}
 
-// Init configures the pex.PeerList and load local data
+// Configure the pex.PeerList and load local data
 func (self *Peers) Init() {
 	peers := pex.NewPex(self.Config.Max)
 	err := peers.Load(self.Config.DataDirectory)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			logger.Notice("Failed to load peer database")
-			logger.Notice("Reason: %v", err)
-		}
+		logger.Notice("Failed to load peer database")
+		logger.Notice("Reason: %v", err)
 	}
 	logger.Debug("Init peers")
 	peers.AllowLocalhost = self.Config.AllowLocalhost
 
 	//Boot strap peers
 	for _, addr := range DefaultConnections {
-		// default peers will mark as trusted peers.
-		_, err := peers.AddPeer(addr)
-		if err != nil {
-			logger.Critical("add peer error:%v", err)
-		}
-		peers.SetTrustState(addr, true)
+		peers.AddPeer(addr)
 	}
 
 	self.Peers = peers
-	self.Peers.Save(self.Config.DataDirectory)
 }
 
 // Shutdown the PeerList

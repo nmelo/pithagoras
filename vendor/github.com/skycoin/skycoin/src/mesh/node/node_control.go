@@ -1,45 +1,37 @@
-package node
+package mesh
 
 import (
 	"errors"
 	"fmt"
 
-	"github.com/skycoin/skycoin/src/mesh/messages"
+	"github.com/satori/go.uuid"
 )
 
-func (self *Node) AddControlChannel() messages.ChannelId {
-
-	channel := newControlChannel()
-
+func (self *Node) AddControlChannel(channel *ControlChannel) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	self.controlChannels[channel.id] = channel
-	return channel.id
+	self.controlChannels[channel.ID] = channel
 }
 
-func (self *Node) CloseControlChannel(channelID messages.ChannelId) error {
-
+func (self *Node) RemoveControlChannel(channelID uuid.UUID) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-
-	if _, ok := self.controlChannels[channelID]; !ok {
-		return errors.New(fmt.Sprintf("Control channel %s not found", channelID))
-	}
 
 	delete(self.controlChannels, channelID)
-	return nil
 }
 
-func (self *Node) handleControlMessage(channelID messages.ChannelId, message []byte) error {
-
-	self.lock.Lock()
+func (self *Node) HandleControlMessage(channelID uuid.UUID, message interface{}) error {
 
 	channel, ok := self.controlChannels[channelID]
-	self.lock.Unlock()
 	if !ok {
 		return errors.New(fmt.Sprintf("Control channel %s not found", channelID))
 	}
 
-	return channel.handleMessage(self, message)
+	err := channel.HandleMessage(self, message)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

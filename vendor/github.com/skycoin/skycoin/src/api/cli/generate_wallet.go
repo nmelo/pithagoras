@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	bip39 "github.com/skycoin/skycoin/src/api/cli/go-bip39"
 	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/cipher/go-bip39"
 	secp256k1 "github.com/skycoin/skycoin/src/cipher/secp256k1-go"
 	"github.com/skycoin/skycoin/src/wallet"
 
@@ -113,7 +113,7 @@ func generateWallet(c *gcli.Context) error {
 	if err != nil {
 		return err
 	}
-	wlt := wallet.NewWallet(wltName, wallet.OptLabel(label), wallet.OptSeed(sd))
+	wlt := wallet.NewWallet(sd, wltName, label)
 	wlt.GenerateAddresses(int(num))
 
 	// check if the wallet dir does exist.
@@ -156,6 +156,7 @@ func makeSeed(s string, r, rd bool) (string, error) {
 	}
 
 	// 001, 000
+	// https://github.com/tyler-smith/go-bip39 generate mnemonic.
 	entropy, _ := bip39.NewEntropy(128)
 	mnemonic, _ := bip39.NewMnemonic(entropy)
 	return mnemonic, nil

@@ -28,8 +28,8 @@ import (
 //"github.com/skycoin/skycoin/src/wallet"
 
 var (
-	logger     = util.MustGetLogger("main")
-	logFormat  = "[skycoin.%{module}:%{level}] %{message}"
+	logger     = logging.MustGetLogger("main")
+	logFormat  = "[skycion.%{module}:%{level}] %{message}"
 	logModules = []string{
 		"main",
 		"daemon",
@@ -56,10 +56,11 @@ var (
 	//GenesisCoinVolume: 100e12, //100e6 * 10e6
 
 	DefaultConnections = []string{
-		"118.178.135.93:6000",
-		"47.88.33.156:6000",
-		"121.41.103.148:6000",
-		"120.77.69.188:6000",
+		"13.76.90.237:6000",
+		"40.74.142.139:6000",
+		"188.226.245.87:6000",
+		"40.74.80.119:6000",
+		"120.26.247.42",
 	}
 )
 
@@ -95,10 +96,6 @@ type Config struct {
 	WebInterfaceKey   string
 	WebInterfaceHTTPS bool
 
-	RPCInterface     bool
-	RPCInterfacePort int
-	RPCInterfaceAddr string
-
 	// Launch System Default Browser after client startup
 	LaunchBrowser bool
 
@@ -118,6 +115,10 @@ type Config struct {
 	// Wallets
 	// Defaults to ${DataDirectory}/wallets/
 	WalletDirectory string
+	BlockchainFile  string
+	BlockSigsFile   string
+
+	// Centralized network configuration
 
 	RunMaster bool
 
@@ -167,14 +168,6 @@ func (c *Config) register() {
 			"If not provided, will use key.pem in -data-directory")
 	flag.BoolVar(&c.WebInterfaceHTTPS, "web-interface-https",
 		c.WebInterfaceHTTPS, "enable HTTPS for web interface")
-
-	flag.BoolVar(&c.RPCInterface, "rpc-interface", c.RPCInterface,
-		"enable the rpc interface")
-	flag.IntVar(&c.RPCInterfacePort, "rpc-interface-port", c.RPCInterfacePort,
-		"port to serve rpc interface on")
-	flag.StringVar(&c.RPCInterfaceAddr, "rpc-interface-addr", c.RPCInterfaceAddr,
-		"addr to serve rpc interface on")
-
 	flag.BoolVar(&c.LaunchBrowser, "launch-browser", c.LaunchBrowser,
 		"launch system default webbrowser at client startup")
 	flag.BoolVar(&c.PrintWebInterfaceAddress, "print-web-interface-address",
@@ -215,6 +208,11 @@ func (c *Config) register() {
 	flag.StringVar(&c.WalletDirectory, "wallet-dir", c.WalletDirectory,
 		"location of the wallet files. Defaults to ~/.skycoin/wallet/")
 
+	flag.StringVar(&c.BlockchainFile, "blockchain-file", c.BlockchainFile,
+		"location of the blockchain file. Default to ~/.skycoin/blockchain.bin")
+	flag.StringVar(&c.BlockSigsFile, "blocksigs-file", c.BlockSigsFile,
+		"location of the block signatures file. Default to ~/.skycoin/blockchain.sigs")
+
 	flag.DurationVar(&c.OutgoingConnectionsRate, "connection-rate",
 		c.OutgoingConnectionsRate, "How often to make an outgoing connection")
 	flag.BoolVar(&c.LocalhostOnly, "localhost-only", c.LocalhostOnly,
@@ -253,12 +251,7 @@ var devConfig Config = Config{
 	WebInterfaceKey:          "",
 	WebInterfaceHTTPS:        false,
 	PrintWebInterfaceAddress: false,
-
-	RPCInterface:     true,
-	RPCInterfacePort: 6430,
-	RPCInterfaceAddr: "127.0.0.1",
-
-	LaunchBrowser: true,
+	LaunchBrowser:            true,
 	// Data directory holds app data -- defaults to ~/.skycoin
 	DataDirectory: ".skycoin",
 	// Web GUI static resources
@@ -270,6 +263,8 @@ var devConfig Config = Config{
 
 	// Wallets
 	WalletDirectory: "",
+	BlockchainFile:  "",
+	BlockSigsFile:   "",
 
 	// Centralized network configuration
 	RunMaster:        false,
@@ -330,6 +325,12 @@ func (c *Config) postProcess() {
 		c.WebInterfaceKey = filepath.Join(c.DataDirectory, "key.pem")
 	}
 
+	if c.BlockchainFile == "" {
+		c.BlockchainFile = filepath.Join(c.DataDirectory, "blockchain.bin")
+	}
+	if c.BlockSigsFile == "" {
+		c.BlockSigsFile = filepath.Join(c.DataDirectory, "blockchain.sigs")
+	}
 	if c.WalletDirectory == "" {
 		c.WalletDirectory = filepath.Join(c.DataDirectory, "wallets/")
 	}
@@ -432,6 +433,9 @@ func configureDaemon(c *Config) daemon.Config {
 	}
 	dc.Daemon.OutgoingRate = c.OutgoingConnectionsRate
 
+	dc.Visor.Config.BlockchainFile = c.BlockchainFile
+	dc.Visor.Config.BlockSigsFile = c.BlockSigsFile
+
 	dc.Visor.Config.IsMaster = c.RunMaster
 
 	dc.Visor.Config.BlockchainPubkey = c.BlockchainPubkey
@@ -462,13 +466,7 @@ func Run(c *Config) {
 	}
 
 	initProfiling(c.HTTPProf, c.ProfileCPU, c.ProfileCPUFile)
-
-	logCfg := util.DevLogConfig(logModules)
-	logCfg.Format = logFormat
-	logCfg.Colors = c.ColorLog
-	logCfg.InitLogger()
-
-	// initLogging(c.LogLevel, c.ColorLog)
+	initLogging(c.LogLevel, c.ColorLog)
 
 	// start the block db.
 	blockdb.Start()
@@ -494,18 +492,16 @@ func Run(c *Config) {
 
 	// start the webrpc
 	closingC := make(chan struct{})
-	if c.RPCInterface {
-		go webrpc.Start(
-			fmt.Sprintf("%v:%v", c.RPCInterfaceAddr, c.RPCInterfacePort),
-			webrpc.ChanBuffSize(1000),
-			webrpc.ThreadNum(1000),
-			webrpc.Gateway(d.Gateway),
-			webrpc.Quit(closingC))
-	}
+	go webrpc.Start("0.0.0.0:6422",
+		webrpc.ChanBuffSize(1000),
+		webrpc.ThreadNum(1000),
+		webrpc.Gateway(d.Gateway),
+		webrpc.Quit(closingC))
 
 	// Debug only - forces connection on start.  Violates thread safety.
 	if c.ConnectTo != "" {
-		if err := d.Pool.Pool.Connect(c.ConnectTo); err != nil {
+		_, err := d.Pool.Pool.Connect(c.ConnectTo)
+		if err != nil {
 			log.Panic(err)
 		}
 	}
@@ -557,29 +553,11 @@ func Run(c *Config) {
 		}
 	*/
 
-	/*
-		//first transaction
-		if c.RunMaster == true {
-			go func() {
-				for d.Visor.Visor.Blockchain.Head().Seq() < 2 {
-					time.Sleep(5)
-					tx := InitTransaction()
-					err, _ := d.Visor.Visor.InjectTxn(tx)
-					if err != nil {
-						//log.Panic(err)
-					}
-				}
-			}()
-		}
-	*/
-
 	<-quit
 	stopDaemon <- 1
-
-	logger.Info("Shutting down")
-	gui.Shutdown()
 	close(closingC)
 
+	logger.Info("Shutting down")
 	d.Shutdown()
 	logger.Info("Goodbye")
 }

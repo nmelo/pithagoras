@@ -253,14 +253,8 @@ func TestDaemonLoopApiRequest(t *testing.T) {
 	d, quit := setupDaemonLoop()
 	defer closeDaemon(d, quit)
 	go d.Start(quit)
-
-	conn := make(chan interface{})
-	d.Gateway.Requests <- func() {
-		conn <- &Connection{Id: 7}
-	}
-
-	resp := <-conn
-
+	rsp := d.Gateway.doRequest(func() interface{} { return &Connection{Id: 7} })
+	resp := <-rsp
 	assert.Equal(t, resp.(*Connection).Id, 7)
 }
 

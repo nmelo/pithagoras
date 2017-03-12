@@ -1,4 +1,4 @@
-skycoin [![GoDoc](https://godoc.org/github.com/skycoin/skycoin?status.svg)](https://godoc.org/github.com/skycoin/skycoin) [![Go Report Card](https://goreportcard.com/badge/github.com/skycoin/skycoin)](https://goreportcard.com/report/github.com/skycoin/skycoin)
+skycoin [![GoDoc](https://godoc.org/github.com/skycoin/skycoin?status.svg)](https://godoc.org/github.com/skycoin/skycoin) [![Go Report Card](https://goreportcard.com/badge/github.com/skycoin/skycoin)](https://goreportcard.com/report/github.com/skycoin/skycoin) 
 =======
 
 Skycoin is a next-generation cryptocurrency.
@@ -11,6 +11,12 @@ Installation
 ------------
 
 * For detailed installation instructions, see [Installing Skycoin](../../wiki/Installation)*
+
+## For linux:
+
+```sh
+$ sudo apt-get install curl git mercurial make binutils gcc bzr bison libgmp3-dev screen -y
+```
 
 ## For OSX:
 
@@ -27,7 +33,7 @@ $ brew install go
 3) Setup $GOPATH variable, add it to ~/.bash_profile (or bashrc). After editing, open a new tab
 Add to `bashrc` or `bash_profile`
 ```sh
-$ export GOPATH=/Users/<username>/go
+$ export GOPATH=/Users/<username>/go 
 $ export PATH=$PATH:$GOPATH/bin
 
 ```
@@ -47,27 +53,26 @@ $ go get github.com/skycoin/skycoin
 $ cd $GOPATH/src/github.com/skycoin/skycoin
 ```
 
-7) Running Wallet
+7) Install glock and sync all the dependencies 
+```
+$ go get github.com/robfig/glock
+$ glock sync github.com/skycoin/skycoin
+```
+
+8) Run the node ;)
+```
+$ ./run.sh -h
+```
+
+9) Running Wallet
 
 ```
 $ ./run.sh
-OR
-# go run ./cmd/skycoin/skycoin.go
-For Options
-# go run ./cmd/skycoin/skycoin.go --help
 ```
 
-## For linux:
+Then open `http://127.0.0.1:6402` in a browser.
 
-```sh
-$ sudo apt-get install curl git mercurial make binutils gcc bzr bison libgmp3-dev screen -y
-```
-
-#Setup Golang
-- use gvm
-- else download binary and follow instructions
-
-#Golang ENV setup with gvm
+## Golang ENV setup with gvm
 
 In China, use `--source=https://github.com/golang/go` to bypass firewall when fetching golang source
 
@@ -78,14 +83,14 @@ $ source $HOME/.gvm/scripts/gvm
 
 $ gvm install go1.4 --source=https://github.com/golang/go
 $ gvm use go1.4
-$ gvm install go1.7
-$ gvm use go1.7 --default
+$ gvm install go1.6
+$ gvm use go1.6 --default
 ```
 
 If you open up new terminal and the go command is not found then add this to .bashrc . GVM should add this automatically
 ```
 $ [[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm"
-$ gvm use go1.7 >/dev/null
+$ gvm use go1.6 >/dev/null
 ```
 
 
@@ -94,7 +99,11 @@ The skycoin repo must be in $GOPATH, under `src/github.com/skycoin`. Otherwise g
 ```
 #pull skycoin repo into the gopath
 #note: puts the skycoin folder in $GOPATH/src/github.com/skycoin/skycoin
+<<<<<<< HEAD
 go get -v github.com/skycoin/skycoin/...
+=======
+$ go get github.com/skycoin/skycoin
+>>>>>>> e2106ef15742ef4242d3cca2959e652d874ce58b
 
 #create symlink of the repo
 $ cd $HOME
@@ -104,18 +113,16 @@ $ ln -s $GOPATH/src/github.com/skycoin/skycoin skycoin
 Dependencies
 ------------
 
-Dependencies are managed with [gvt](https://github.com/FiloSottile/gvt).
-
-To install gvt:
 ```
-$ go get -u github.com/FiloSottile/gvt
+$ go get github.com/robfig/glock
+$ glock sync github.com/skycoin/skycoin
+$ go get ./cmd/skycoin
 ```
 
-gvt vendors all dependencies into the repo.
-
-If you change the dependencies, you should update them as needed with `gvt fetch`, `gvt update`, `gvt delete`, etc.
-
-Refer to the [gvt documentation](https://github.com/FiloSottile/gvt) or `gvt help` for further instructions.
+To update dependencies
+```
+$ glock save github.com/skycoin/skycoin/cmd/skycoin
+```
 
 Running A Skycoin Node
 ----------------------
@@ -123,7 +130,7 @@ Running A Skycoin Node
 ```
 $ cd skycoin
 $ screen
-$ go run ./cmd/skycoin/skycoin.go
+$ go run ./cmd/skycoin/skycoin.go 
 #then ctrl+A then D to exit screen
 #screen -x to reattach screen
 ```
@@ -224,15 +231,16 @@ Meshnet reminders
 Rebuilding Wallet HTML
 ----------------------
 
-```sh
-$ npm install
-$ gulp build
-```
+<<<<<<< HEAD
+npm install
+gulp build
 
 Release Builds
 ----
 
+=======
 ```sh
 $ npm install
-$ gulp dist
+$ gulp build
 ```
+>>>>>>> e2106ef15742ef4242d3cca2959e652d874ce58b

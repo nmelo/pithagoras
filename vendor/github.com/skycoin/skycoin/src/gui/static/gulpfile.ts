@@ -14,25 +14,19 @@ gulp.task('clean', (cb) => {
     return del(["dist"], cb);
 });
 
-gulp.task('clean_dev', (cb) => {
-    return del(["dev"], cb);
-});
-
 /**
  * Lint all custom TypeScript files.
  */
 gulp.task('tslint', () => {
     return gulp.src("src/**/*.ts")
-        .pipe(tslint({
-            formatter: 'prose'
-        }))
-        .pipe(tslint.report());
+        .pipe(tslint())
+        .pipe(tslint.report('prose'));
 });
 
 /**
  * Compile TypeScript sources and create sourcemaps in build directory.
  */
-gulp.task("compile", () => {
+gulp.task("compile", ["tslint"], () => {
     let tsResult = gulp.src("src/**/*.ts")
         .pipe(sourcemaps.init())
         .pipe(tsc(tsProject));
@@ -41,26 +35,12 @@ gulp.task("compile", () => {
         .pipe(gulp.dest("dist"));
 });
 
-gulp.task("compile_dev", () => {
-    let tsResult = gulp.src("src/**/*.ts")
-        .pipe(sourcemaps.init())
-        .pipe(tsc(tsProject));
-    return tsResult.js
-        .pipe(sourcemaps.write("." , {sourceRoot: '/src'}))
-        .pipe(gulp.dest("dev"));
-});
-
 /**
  * Copy all resources that are not TypeScript files into build directory.
  */
 gulp.task("resources", () => {
     return gulp.src(["src/**/*", "!**/*.ts"])
         .pipe(gulp.dest("dist"));
-});
-
-gulp.task("resources_dev", () => {
-    return gulp.src(["src/**/*", "!**/*.ts"])
-        .pipe(gulp.dest("dev"));
 });
 
 /**
@@ -79,19 +59,6 @@ gulp.task("libs", () => {
         .pipe(gulp.dest("dist/lib"));
 });
 
-gulp.task("libs_dev", () => {
-    return gulp.src([
-        'es6-shim/es6-shim.min.js',
-        'systemjs/dist/system-polyfills.js',
-        'systemjs/dist/system.src.js',
-        'reflect-metadata/Reflect.js',
-        'rxjs/**',
-        'zone.js/dist/**',
-        '@angular/**'
-    ], {cwd: "node_modules/**"}) /* Glob required here. */
-        .pipe(gulp.dest("dev/lib"));
-});
-
 /**
  * Watch for changes in TypeScript, HTML and CSS files.
  */
@@ -108,9 +75,5 @@ gulp.task('watch', function () {
  * Build the project.
  */
 gulp.task("dist", ['compile', 'resources', 'libs'], () => {
-    console.log("Building the project ...");
-});
-
-gulp.task("build", ['compile_dev', 'resources_dev', 'libs_dev'], () => {
     console.log("Building the project ...");
 });

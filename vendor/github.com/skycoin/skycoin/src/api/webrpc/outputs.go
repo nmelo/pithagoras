@@ -1,16 +1,12 @@
 package webrpc
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/daemon"
-	"github.com/skycoin/skycoin/src/visor"
-)
+import "strings"
+import "github.com/skycoin/skycoin/src/cipher"
+import "fmt"
+import "github.com/skycoin/skycoin/src/visor"
 
 type OutputsResult struct {
-	Outputs visor.ReadableOutputSet `json:"outputs"`
+	Outputs []visor.ReadableOutput `json:"outputs"`
 }
 
 func getOutputsHandler(req Request, gateway Gatewayer) Response {
@@ -34,6 +30,6 @@ func getOutputsHandler(req Request, gateway Gatewayer) Response {
 		}
 	}
 
-	outs := gateway.GetUnspentOutputs(daemon.FbyAddresses(addrs))
+	outs := gateway.GetUnspentByAddrs(addrs)
 	return makeSuccessResponse(req.ID, OutputsResult{outs})
 }

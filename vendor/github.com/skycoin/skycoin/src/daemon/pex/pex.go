@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	logging "github.com/op/go-logging"
 	"github.com/skycoin/skycoin/src/util"
 )
 
@@ -39,7 +40,7 @@ var (
 	RefreshBlacklistRate = time.Second * 30
 	// Logging. See http://godoc.org/github.com/op/go-logging for
 	// instructions on how to include this log's output
-	logger = util.MustGetLogger("pex")
+	logger = logging.MustGetLogger("pex")
 	// Default rng
 	rnum = rand.New(rand.NewSource(time.Now().Unix()))
 	// For removing inadvertent whitespace from addresses
@@ -73,16 +74,14 @@ func ValidateAddress(ipPort string, allowLocalhost bool) bool {
 
 // Peer represents a known peer
 type Peer struct {
-	Addr          string    // An address of the form ip:port
-	LastSeen      time.Time // Unix timestamp when this peer was last seen
-	Private       bool      // Whether it should omitted from public requests
-	Trusted       bool      // Whether this peer is trusted
-	HasIncomePort bool      // Wheter this peer has incomming port
+	Addr     string    // An address of the form ip:port
+	LastSeen time.Time // Unix timestamp when this peer was last seen
+	Private  bool      // Whether it should omitted from public requests
 }
 
 // Returns a *Peer initialised by an address string of the form ip:port
 func NewPeer(address string) *Peer {
-	p := &Peer{Addr: address, Private: false, Trusted: false}
+	p := &Peer{Addr: address, Private: false}
 	p.Seen()
 	return p
 }
@@ -221,64 +220,17 @@ func LoadBlacklist(dir string) (Blacklist, error) {
 // Peerlist is a map of addresses to *PeerStates
 type Peerlist map[string]*Peer
 
-// Peerlist records the peers
-// type Peerlist struct {
-// 	// where to get the random peers for exchanging
-// 	Exchange map[string]*Peer
-// }
-
-// func makePeerList(maxPeers int) Peerlist {
-// 	return Peerlist{
-// 		Exchange: make(map[string]*Peer, maxPeers),
-// 	}
-// }
-
-// GetPublicTrustPeers returns all trusted public peers
-func (self Peerlist) GetPublicTrustPeers() []*Peer {
-	keys := self.getTrustAddresses(false)
-	peers := make([]*Peer, len(keys))
-	for i, key := range keys {
-		peers[i] = self[key]
-	}
-	return peers
-}
-
-// GetPrivateTrustPeers returns all trusted private peers
-func (self Peerlist) GetPrivateTrustPeers() []*Peer {
-	keys := self.getTrustAddresses(true)
-	peers := make([]*Peer, len(keys))
-	for i, key := range keys {
-		peers[i] = self[key]
-	}
-	return peers
-}
-
-// GetAllTrustedPeers returns all trusted peers, including private and public peers.
-func (self Peerlist) GetAllTrustedPeers() []*Peer {
-	keys := self.getAllTrustPeers()
-	peers := make([]*Peer, len(keys))
-	for i, key := range keys {
-		peers[i] = self[key]
-	}
-	return peers
-}
-
-func (self Peerlist) getTrustAddresses(private bool) []string {
-	keys := []string{}
+// Returns the string addresses of all public peers
+func (self Peerlist) getAddresses(private bool) []string {
+	keys := make([]string, 0, len(self))
 	for key, p := range self {
-		if p.Trusted {
-			if private && p.Private {
-				keys = append(keys, key)
-			} else if !private && !p.Private {
-				keys = append(keys, key)
-			}
+		if private && p.Private {
+			keys = append(keys, key)
+		} else if !private && !p.Private {
+			keys = append(keys, key)
 		}
 	}
 	return keys
-}
-
-func (self Peerlist) getAllTrustPeers() []string {
-	return append(self.getTrustAddresses(false), self.getTrustAddresses(true)...)
 }
 
 // Returns the string addresses of all public peers
@@ -306,20 +258,6 @@ func (self Peerlist) ClearOld(timeAgo time.Duration) {
 	}
 }
 
-// Returns the string addresses of all public peers
-func (self Peerlist) getAddresses(private bool) []string {
-	keys := make([]string, 0, len(self))
-	for key, p := range self {
-		if private && p.Private {
-			keys = append(keys, key)
-		} else if !private && !p.Private {
-			keys = append(keys, key)
-		}
-	}
-
-	return keys
-}
-
 // Returns n random peers, or all of the peers, whichever is lower.
 // If count is 0, all of the peers are returned, shuffled.
 func (self Peerlist) random(count int, includePrivate bool) []*Peer {
@@ -342,58 +280,6 @@ func (self Peerlist) random(count int, includePrivate bool) []*Peer {
 		peers = append(peers, self[keys[i]])
 	}
 	return peers
-}
-
-func (self Peerlist) getExchgAddr(private bool) []string {
-	keys := []string{}
-	for a, p := range self {
-		if p.HasIncomePort && p.Private {
-			keys = append(keys, a)
-		}
-	}
-	return keys
-}
-
-// returns all exchangeable addresses
-func (self Peerlist) getAllExchgAddr() []string {
-	return append(self.getExchgAddr(true), self.getExchgAddr(false)...)
-}
-
-// returns n random exchangeable peers, return all if count is 0.
-func (self Peerlist) randomExchg(count int, includePrivate bool) []*Peer {
-	keys := []string{}
-	if includePrivate {
-		keys = self.getAllExchgAddr()
-	} else {
-		keys = self.getExchgAddr(false)
-	}
-
-	if len(keys) == 0 {
-		return make([]*Peer, 0)
-	}
-
-	max := count
-	if count == 0 || count > len(keys) {
-		max = len(keys)
-	}
-	peers := make([]*Peer, 0, max)
-	perm := rand.Perm(len(keys))
-	for _, i := range perm[:max] {
-		peers = append(peers, self[keys[i]])
-	}
-	return peers
-}
-
-// RandomExchgPublic returns n random exchangeable public peers
-// return all exchangeable public peers if count is 0.
-func (self Peerlist) RandomExchgPublic(count int) []*Peer {
-	return self.randomExchg(count, false)
-}
-
-// RandomExchgAll returns n random exchangeable peers, including private peers.
-// return all exchangeable peers if count is 0.
-func (self Peerlist) RandomExchgAll(count int) []*Peer {
-	return self.randomExchg(count, true)
 }
 
 // Returns n random peers, or all of the peers, whichever is lower.
@@ -431,9 +317,10 @@ func LoadPeerlist(dir string) (Peerlist, error) {
 	peerlist := Peerlist{}
 	fn := filepath.Join(dir, PeerDatabaseFilename)
 	err := util.LoadJSON(fn, &peerlist)
-	// if err != nil {
-	// 	logger.Notice("LoadPeerList Failed: %s", err)
-	// }
+
+	if err != nil {
+		logger.Notice("LoadPeerList Failed: %s", err)
+	}
 	return peerlist, err
 
 }
@@ -480,42 +367,6 @@ func (self *Pex) AddPeer(addr string) (*Peer, error) {
 	}
 }
 
-// SetTrustState updates the peer's Trusted statue
-func (self *Pex) SetTrustState(addr string, trusted bool) error {
-	if !ValidateAddress(addr, self.AllowLocalhost) {
-		return InvalidAddressError
-	}
-	if self.IsBlacklisted(addr) {
-		return BlacklistedAddressError
-	}
-
-	if p, ok := self.Peerlist[addr]; ok {
-		p.Trusted = trusted
-		return nil
-	}
-
-	return fmt.Errorf("%s does not exist in peel list", addr)
-}
-
-// SetPeerHasInPort update whether the peer has incomming port.
-func (self *Pex) SetPeerHasInPort(addr string, v bool) error {
-	if !ValidateAddress(addr, self.AllowLocalhost) {
-		return InvalidAddressError
-	}
-
-	if self.IsBlacklisted(addr) {
-		return BlacklistedAddressError
-	}
-
-	if p, ok := self.Peerlist[addr]; ok {
-		p.HasIncomePort = v
-		p.Seen()
-		return nil
-	}
-
-	return fmt.Errorf("peer %s is not in exchange peer list", addr)
-}
-
 // Add a peer address to the blacklist.  Will not blacklist private peers.
 func (self *Pex) AddBlacklistEntry(addr string, duration time.Duration) {
 	if !ValidateAddress(addr, self.AllowLocalhost) {
@@ -558,7 +409,7 @@ func (self *Pex) AddPeers(peers []string) int {
 	return n
 }
 
-// Load loads both the normal peer and blacklisted peer databases
+// Loads both the normal peer and blacklisted peer databases
 func (self *Pex) Load(dir string) error {
 	peerlist, err := LoadPeerlist(dir)
 	if err != nil {
@@ -569,7 +420,7 @@ func (self *Pex) Load(dir string) error {
 		return err
 	}
 	// Remove any peers that appear in the blacklist, if not private
-	for addr := range blacklist {
+	for addr, _ := range blacklist {
 		p := peerlist[addr]
 		if p != nil && p.Private {
 			logger.Warning("Peer %s appears in both peerlist and blacklist, "+

@@ -4,10 +4,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"path/filepath"
 
+	logging "github.com/op/go-logging"
 	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/skycoin/src/util"
 
@@ -15,9 +17,7 @@ import (
 )
 
 var (
-	logger   = util.MustGetLogger("gui")
-	listener net.Listener
-	quit     chan struct{}
+	logger = logging.MustGetLogger("gui")
 )
 
 const (
@@ -29,29 +29,28 @@ const (
 // Begins listening on http://$host, for enabling remote web access
 // Does NOT use HTTPS
 func LaunchWebInterface(host, staticDir string, daemon *daemon.Daemon) error {
-	quit = make(chan struct{})
 	logger.Info("Starting web interface on http://%s", host)
 	logger.Warning("HTTPS not in use!")
-	appLoc, err := util.DetermineResourcePath(staticDir, resourceDir, devDir)
+	logger.Info("Web resources directory: %s", staticDir)
+
+	appLoc, err := util.DetermineResourcePath(staticDir, devDir, resourceDir)
 	if err != nil {
 		return err
 	}
-	logger.Info("Web resources directory: %s", appLoc)
 
-	listener, err = net.Listen("tcp", host)
+	listener, err := net.Listen("tcp", host)
 	if err != nil {
 		return err
 	}
 
 	// Runs http.Serve() in a goroutine
-	serve(listener, NewGUIMux(appLoc, daemon), quit)
+	serve(listener, NewGUIMux(appLoc, daemon))
 	return nil
 }
 
 // Begins listening on https://$host, for enabling remote web access
 // Uses HTTPS
 func LaunchWebInterfaceHTTPS(host, staticDir string, daemon *daemon.Daemon, certFile, keyFile string) error {
-	quit = make(chan struct{})
 	logger.Info("Starting web interface on https://%s", host)
 	logger.Info("Using %s for the certificate", certFile)
 	logger.Info("Using %s for the key", keyFile)
@@ -67,37 +66,29 @@ func LaunchWebInterfaceHTTPS(host, staticDir string, daemon *daemon.Daemon, cert
 		return err
 	}
 
-	listener, err = tls.Listen("tcp", host, &tls.Config{Certificates: certs})
+	listener, err := tls.Listen("tcp", host, &tls.Config{Certificates: certs})
 	if err != nil {
 		return err
 	}
 
 	// Runs http.Serve() in a goroutine
-	serve(listener, NewGUIMux(appLoc, daemon), quit)
+	serve(listener, NewGUIMux(appLoc, daemon))
+
 	return nil
 }
 
-func serve(listener net.Listener, mux *http.ServeMux, q chan struct{}) {
+func serve(listener net.Listener, mux *http.ServeMux) {
+	// http.Serve() blocks
+	// Minimize the chance of http.Serve() not being ready before the
+	// function returns and the browser opens
+	ready := make(chan struct{})
 	go func() {
-		for {
-			if err := http.Serve(listener, mux); err != nil {
-				select {
-				case <-q:
-					return
-				default:
-				}
-				continue
-			}
+		ready <- struct{}{}
+		if err := http.Serve(listener, mux); err != nil {
+			log.Panic(err)
 		}
 	}()
-}
-
-// Shutdown close http service
-func Shutdown() {
-	// must close quit first
-	close(quit)
-	listener.Close()
-	listener = nil
+	<-ready
 }
 
 // Creates an http.ServeMux with handlers registered
@@ -126,8 +117,6 @@ func NewGUIMux(appLoc string, daemon *daemon.Daemon) *http.ServeMux {
 	RegisterTxHandlers(mux, daemon.Gateway)
 	// UxOUt api handler
 	RegisterUxOutHandlers(mux, daemon.Gateway)
-	// expplorer handler
-	RegisterExploerHandlers(mux, daemon.Gateway)
 	return mux
 }
 

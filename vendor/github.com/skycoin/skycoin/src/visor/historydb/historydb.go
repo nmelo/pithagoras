@@ -38,13 +38,18 @@ type HistoryDB struct {
 	// blocks  *blocks       // blocks bucket.
 	txns    *transactions // transactions bucket.
 	outputs *UxOuts       // outputs bucket.
-	addrUx  *addressUx    // bucket which stores all UxOuts that address recved.
+	addrIn  *addressUx    // bucket which stores all UxOuts that address recved.
+	addrOut *addressUx    // bucket which stores all UxOuts that address spent.
 }
 
 // New create historydb instance and create corresponding buckets if does not exist.
 func New(db *bolt.DB) (*HistoryDB, error) {
 	hd := HistoryDB{db: db}
 	var err error
+	// hd.blocks, err = newBlockBkt(db)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	hd.txns, err = newTransactionsBkt(db)
 	if err != nil {
@@ -58,7 +63,13 @@ func New(db *bolt.DB) (*HistoryDB, error) {
 	}
 
 	// create the toAddressTx instance.
-	hd.addrUx, err = newAddressUxBkt(db)
+	hd.addrIn, err = newAddressInBkt(db)
+	if err != nil {
+		return nil, err
+	}
+
+	// create the fromAddressTx instance.
+	hd.addrOut, err = newAddressOutBkt(db)
 	if err != nil {
 		return nil, err
 	}
@@ -102,10 +113,15 @@ func (hd *HistoryDB) ProcessBlock(b *coin.Block) error {
 				if err != nil {
 					return err
 				}
-				// update output's spent block seq and txid.
+				// update the spent block seq of the output.
 				o.SpentBlockSeq = b.Seq()
 				o.SpentTxID = t.Hash()
 				if err := hd.outputs.Set(*o); err != nil {
+					return err
+				}
+
+				// index the output for address out
+				if err := hd.addrOut.Add(o.Out.Body.Address, o.Hash()); err != nil {
 					return err
 				}
 			}
@@ -121,7 +137,7 @@ func (hd *HistoryDB) ProcessBlock(b *coin.Block) error {
 				return err
 			}
 
-			if err := hd.addrUx.Add(ux.Body.Address, ux.Hash()); err != nil {
+			if err := hd.addrIn.Add(ux.Body.Address, ux.Hash()); err != nil {
 				return err
 			}
 		}
@@ -134,7 +150,6 @@ func (hd HistoryDB) GetTransaction(hash cipher.SHA256) (*Transaction, error) {
 	return hd.txns.Get(hash)
 }
 
-// GetLastTxs gets the latest N transactions.
 func (hd HistoryDB) GetLastTxs() ([]*Transaction, error) {
 	txHashes := hd.txns.GetLastTxs()
 	txs := make([]*Transaction, len(txHashes))
@@ -148,9 +163,26 @@ func (hd HistoryDB) GetLastTxs() ([]*Transaction, error) {
 	return txs, nil
 }
 
-// GetAddrUxOuts get all uxout that the address affected.
-func (hd HistoryDB) GetAddrUxOuts(address cipher.Address) ([]*UxOut, error) {
-	hashes, err := hd.addrUx.Get(address)
+// GetSpentUxOutOfAddr get all spent uxout of specifc address.
+func (hd HistoryDB) GetSpentUxOutOfAddr(address cipher.Address) ([]*UxOut, error) {
+	hashes, err := hd.addrOut.Get(address)
+	if err != nil {
+		return []*UxOut{}, err
+	}
+	uxOuts := make([]*UxOut, len(hashes))
+	for i, hash := range hashes {
+		ux, err := hd.outputs.Get(hash)
+		if err != nil {
+			return []*UxOut{}, err
+		}
+		uxOuts[i] = ux
+	}
+	return uxOuts, nil
+}
+
+// GetRecvUxOutOfAddr get all uxout that the address received.
+func (hd HistoryDB) GetRecvUxOutOfAddr(address cipher.Address) ([]*UxOut, error) {
+	hashes, err := hd.addrIn.Get(address)
 	if err != nil {
 		return []*UxOut{}, err
 	}
