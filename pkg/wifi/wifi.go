@@ -13,5 +13,12 @@ func PrintList() {
 	}
 	for _, v := range ifaces {
 		fmt.Println(v.Name)
+		wn, err := v.Scan()
+		if err != nil {
+			fmt.Println(err)
+		}
+		for _, n := range wn {
+			fmt.Println("Network: ", n.ESSID)
+		}
 	}
 }

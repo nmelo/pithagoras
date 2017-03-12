@@ -7,6 +7,6 @@ import (
 )
 
 func main() {
-	fmt.Println("Getting list of wifis")
+	fmt.Println("Getting list of wifi")
 	wifi.PrintList()
 }
