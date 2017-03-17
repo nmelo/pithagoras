@@ -1,12 +1,9 @@
 package db
 
 import (
-	"log"
-
 	"errors"
-
 	"fmt"
-
+	"log"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -58,11 +55,11 @@ func PrintBucket(bucket string) error {
 
 		err := b.ForEach(func(k, v []byte) error {
 			date := time.Time{}
-			err := date.UnmarshalBinary(k)
+			err := date.UnmarshalBinary(v)
 			if err != nil {
 				return err
 			}
-			log.Printf("Sessions: %s, %s", date, v)
+			log.Printf("Sessions: %s, %s", k, date)
 			return nil
 		})
 		if err != nil {
