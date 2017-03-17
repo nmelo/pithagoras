@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/nmelo/pithagoras/pkg/bluetooth"
-	"github.com/nmelo/pithagoras/pkg/db"
 	"github.com/nmelo/pithagoras/pkg/session"
 )
 

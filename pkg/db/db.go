@@ -28,8 +28,7 @@ func Close() error {
 
 func PutInBucket(bucket []byte, key []byte, value []byte) error {
 	if err := Connect(); err != nil {
-		fmt.Println("Exiting: ", err)
-		return
+		return err
 	}
 	defer db.Close()
 
@@ -52,8 +51,7 @@ func PutInBucket(bucket []byte, key []byte, value []byte) error {
 
 func PrintBucket(bucket string) error {
 	if err := Connect(); err != nil {
-		fmt.Println("Exiting: ", err)
-		return
+		return err
 	}
 	defer db.Close()
 

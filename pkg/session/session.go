@@ -18,8 +18,7 @@ var (
 
 func Start() error {
 	if err := db.Connect(); err != nil {
-		fmt.Println("Exiting: ", err)
-		return
+		return err
 	}
 	defer db.Close()
 
@@ -39,8 +38,7 @@ func Start() error {
 
 func End() error {
 	if err := db.Connect(); err != nil {
-		fmt.Println("Exiting: ", err)
-		return
+		return err
 	}
 	defer db.Close()
 
