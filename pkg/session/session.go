@@ -17,11 +17,6 @@ var (
 )
 
 func Start() error {
-	if err := db.Connect(); err != nil {
-		return err
-	}
-	defer db.Close()
-
 	randBytes := make([]byte, 16)
 	rand.Read(randBytes)
 	SessionID = fmt.Sprintf("%X", randBytes)
@@ -33,15 +28,16 @@ func Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshall start date: %s", err)
 	}
-	return db.PutInBucket([]byte(Bucket), []byte(fmt.Sprintf("start-%s", SessionID)), startBytes)
+	err = db.PutInBucket([]byte(Bucket), []byte(fmt.Sprintf("start-%s", SessionID)), startBytes)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Session saved")
+
+	return nil
 }
 
 func End() error {
-	if err := db.Connect(); err != nil {
-		return err
-	}
-	defer db.Close()
-
 	fmt.Println("Saving session end...")
 
 	end := time.Now()
