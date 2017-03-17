@@ -30,10 +30,6 @@ func installSignalHandler() {
 }
 
 func main() {
-	if err := db.Connect(); err != nil {
-		fmt.Println("Exiting: ", err)
-		return
-	}
 
 	if err := session.Start(); err != nil {
 		fmt.Println("Exiting: ", err)
@@ -51,7 +47,6 @@ func main() {
 		if err := session.End(); err != nil {
 			fmt.Println("error: ", err)
 		}
-		db.Close()
 
 		fmt.Println("Shutting down...")
 	}

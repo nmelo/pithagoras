@@ -17,6 +17,12 @@ var (
 )
 
 func Start() error {
+	if err := db.Connect(); err != nil {
+		fmt.Println("Exiting: ", err)
+		return
+	}
+	defer db.Close()
+
 	randBytes := make([]byte, 16)
 	rand.Read(randBytes)
 	SessionID = fmt.Sprintf("%X", randBytes)
@@ -32,6 +38,12 @@ func Start() error {
 }
 
 func End() error {
+	if err := db.Connect(); err != nil {
+		fmt.Println("Exiting: ", err)
+		return
+	}
+	defer db.Close()
+
 	fmt.Println("Saving session end...")
 
 	end := time.Now()

@@ -27,6 +27,12 @@ func Close() error {
 }
 
 func PutInBucket(bucket []byte, key []byte, value []byte) error {
+	if err := Connect(); err != nil {
+		fmt.Println("Exiting: ", err)
+		return
+	}
+	defer db.Close()
+
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists(bucket)
 		if err != nil {
@@ -45,6 +51,11 @@ func PutInBucket(bucket []byte, key []byte, value []byte) error {
 }
 
 func PrintBucket(bucket string) error {
+	if err := Connect(); err != nil {
+		fmt.Println("Exiting: ", err)
+		return
+	}
+	defer db.Close()
 
 	fmt.Println("Printing bucket...")
 	err := db.View(func(tx *bolt.Tx) error {

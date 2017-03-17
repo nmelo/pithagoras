@@ -8,12 +8,8 @@ import (
 )
 
 func main() {
-	db.Connect()
-
 	err := db.PrintBucket(session.Bucket)
 	if err != nil {
 		fmt.Printf("Exiting: %s\n", err)
 	}
-
-	defer db.Close()
 }
