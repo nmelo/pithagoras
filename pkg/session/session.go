@@ -28,7 +28,7 @@ func Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshall start date: %s", err)
 	}
-	return db.PutInBucket([]byte(Bucket), fmt.Sprintf("start-%s", SessionID), startBytes)
+	return db.PutInBucket([]byte(Bucket), []byte(fmt.Sprintf("start-%s", SessionID)), startBytes)
 }
 
 func End() error {
@@ -39,5 +39,5 @@ func End() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshall end date: %s", err)
 	}
-	return db.PutInBucket([]byte(Bucket), fmt.Sprintf("end-%s", SessionID), endBytes)
+	return db.PutInBucket([]byte(Bucket), []byte(fmt.Sprintf("end-%s", SessionID)), endBytes)
 }
