@@ -1,0 +1,8 @@
+[Unit]
+Description=Pithagoras
+
+[Service]
+ExecStart=/usr/local/bin/pithagoras
+
+[Install]
+WantedBy=multi-user.target
