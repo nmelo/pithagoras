@@ -1,20 +1,18 @@
-package blue
+package bluetooth
 
 import (
 	"fmt"
-	"log"
+	"sync"
 
 	"github.com/paypal/gatt"
 	"github.com/paypal/gatt/examples/option"
 	"github.com/paypal/gatt/examples/service"
 )
 
-func Connect() {
-	fmt.Println("Starting bluetooth server...")
-
+func Serve(wg *sync.WaitGroup) error {
 	d, err := gatt.NewDevice(option.DefaultServerOptions...)
 	if err != nil {
-		log.Fatalf("Failed to open device, err: %s", err)
+		return fmt.Errorf("Failed to open device, err: %s", err)
 	}
 
 	// Register optional handlers.
@@ -52,5 +50,7 @@ func Connect() {
 	}
 
 	d.Init(onStateChanged)
-	select {}
+	wg.Wait()
+
+	return nil
 }
