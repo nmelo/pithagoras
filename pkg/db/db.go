@@ -18,7 +18,7 @@ var (
 
 func Connect() error {
 	var err error
-	db, err = bolt.Open("/usr/local/pithagoras/data/data.db", 0600, nil)
+	db, err = bolt.Open("data.db", 0600, nil)
 	if err != nil {
 		return err
 	}
