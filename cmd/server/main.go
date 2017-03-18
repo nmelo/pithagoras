@@ -1,28 +1,28 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 
 	"github.com/nmelo/pithagoras/pkg/bluetooth"
 	"github.com/nmelo/pithagoras/pkg/session"
+	"github.com/nmelo/pithagoras/pkg/ui"
 )
 
 var (
-	stop chan bool      = make(chan bool)
-	wg   sync.WaitGroup = sync.WaitGroup{}
+	ctx    context.Context
+	cancel context.CancelFunc
 )
 
-func installSignalHandler() {
+func waitSignal() {
 	handler := make(chan os.Signal, 1)
 	signal.Notify(handler, os.Interrupt)
-
 	go func(handler chan os.Signal) {
 		for sig := range handler {
 			if sig == os.Interrupt {
-				stop <- true
+				cancel()
 			}
 		}
 	}(handler)
@@ -30,19 +30,21 @@ func installSignalHandler() {
 
 func main() {
 
+	ctx, cancel = context.WithCancel(context.Background())
+
 	if err := session.Start(); err != nil {
 		fmt.Println("Exiting: ", err)
 		return
 	}
 
-	fmt.Println("Starting bluetooth service...")
+	go bluetooth.Serve(ctx)
 
-	if err := bluetooth.Serve(&wg); err != nil {
-		fmt.Println("Exiting: ", err)
-		return
-	} else {
-		installSignalHandler()
-		<-stop
+	go ui.Serve(ctx)
+
+	waitSignal()
+
+	select {
+	case <-ctx.Done():
 		if err := session.End(); err != nil {
 			fmt.Println("error: ", err)
 		}

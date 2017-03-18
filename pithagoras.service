@@ -3,6 +3,7 @@ Description=Pithagoras
 
 [Service]
 ExecStart=/usr/local/bin/pithagoras
+Restart=always
 
 [Install]
 WantedBy=multi-user.target

@@ -2,17 +2,23 @@ package bluetooth
 
 import (
 	"fmt"
-	"sync"
+
+	"context"
+
+	"log"
 
 	"github.com/paypal/gatt"
 	"github.com/paypal/gatt/examples/option"
 	"github.com/paypal/gatt/examples/service"
 )
 
-func Serve(wg *sync.WaitGroup) error {
+func Serve(ctx context.Context) error {
+	fmt.Println("Starting bluetooth service...")
+
 	d, err := gatt.NewDevice(option.DefaultServerOptions...)
 	if err != nil {
-		return fmt.Errorf("Failed to open device, err: %s", err)
+		log.Printf("Failed to open device, err: %s", err)
+		return
 	}
 
 	// Register optional handlers.
@@ -50,7 +56,10 @@ func Serve(wg *sync.WaitGroup) error {
 	}
 
 	d.Init(onStateChanged)
-	wg.Wait()
-
+	select {
+	case <-ctx.Done():
+		fmt.Println("Stopping bluetooth...")
+		return nil
+	}
 	return nil
 }

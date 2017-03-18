@@ -10,8 +10,6 @@ import (
 	"github.com/nmelo/pithagoras/pkg/db"
 )
 
-const Bucket string = "Sessions"
-
 var (
 	SessionID string
 )
@@ -28,7 +26,7 @@ func Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshall start date: %s", err)
 	}
-	err = db.PutInBucket([]byte(Bucket), []byte(fmt.Sprintf("start-%s", SessionID)), startBytes)
+	err = db.PutInBucket([]byte(db.Sessions), []byte(fmt.Sprintf("start-%s", SessionID)), startBytes)
 	if err != nil {
 		return err
 	}
@@ -45,5 +43,5 @@ func End() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshall end date: %s", err)
 	}
-	return db.PutInBucket([]byte(Bucket), []byte(fmt.Sprintf("end-%s", SessionID)), endBytes)
+	return db.PutInBucket([]byte(db.Sessions), []byte(fmt.Sprintf("end-%s", SessionID)), endBytes)
 }

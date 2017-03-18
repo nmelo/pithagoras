@@ -2,16 +2,21 @@ package db
 
 import (
 	"errors"
-	"fmt"
-	"log"
 	"time"
 
 	"github.com/boltdb/bolt"
 )
 
+const Sessions string = "Sessions"
+
 var (
 	db *bolt.DB
 )
+
+type Session struct {
+	Key  string
+	Date time.Time
+}
 
 func Connect() error {
 	var err error
@@ -20,10 +25,6 @@ func Connect() error {
 		return err
 	}
 	return nil
-}
-
-func Close() error {
-	return db.Close()
 }
 
 func PutInBucket(bucket []byte, key []byte, value []byte) error {
@@ -49,15 +50,15 @@ func PutInBucket(bucket []byte, key []byte, value []byte) error {
 	return nil
 }
 
-func PrintBucket(bucket string) error {
+func ListSessions() (sessions []Session, err error) {
 	if err := Connect(); err != nil {
-		return err
+		return nil, err
 	}
 	defer db.Close()
 
-	fmt.Println("Printing bucket...")
-	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucket))
+	sessions = []Session{}
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(Sessions))
 		if b == nil {
 			return errors.New("bucket not found")
 		}
@@ -68,16 +69,11 @@ func PrintBucket(bucket string) error {
 			if err != nil {
 				return err
 			}
-			log.Printf("Sessions: %s, %s", k, date)
+
+			sessions = append(sessions, Session{Key: string(k), Date: date})
 			return nil
 		})
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
 		return err
-	}
-	return nil
+	})
+	return sessions, err
 }
