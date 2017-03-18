@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"runtime"
 
 	"github.com/nmelo/pithagoras/pkg/db"
 	"github.com/nmelo/pithagoras/pkg/wifi"
@@ -20,7 +21,14 @@ func Serve(ctx context.Context) {
 
 	http.HandleFunc("/sessions", handleSessions)
 	http.HandleFunc("/wifis", handleWifis)
-	go http.ListenAndServe(":80", nil)
+
+	var addr string
+	if runtime.GOOS == "linux" {
+		addr = ":80"
+	} else {
+		addr = ":8080"
+	}
+	go http.ListenAndServe(addr, nil)
 
 	select {
 	case <-ctx.Done():
@@ -33,9 +41,16 @@ var sessionsTemplate = template.Must(template.New("sessions").Parse(`
 <html>
 <head/>
 <body>
+  <form action="/sessions" method="post">
+	 <input type="submit" value="Clear">
+  </form>
+
+  <span>Sessions:</span>
   <ol>
   {{range .Sessions}}
     <li>{{.Key}} - {{.Date}}</li>
+  {{else}}
+  	No sessions
   {{end}}
   </ol>
 </body>
@@ -43,6 +58,17 @@ var sessionsTemplate = template.Must(template.New("sessions").Parse(`
 `))
 
 func handleSessions(w http.ResponseWriter, req *http.Request) {
+
+	if req.Method == http.MethodPost {
+		err := db.ClearSessions()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error: %s", err), http.StatusInternalServerError)
+			return
+		}
+		req.Method = http.MethodGet
+		http.Redirect(w, req, "/sessions", http.StatusFound)
+		return
+	}
 
 	sessions, err := db.ListSessions()
 	if err != nil {
@@ -65,6 +91,7 @@ var wifisTemplate = template.Must(template.New("wifis").Parse(`
 <html>
 <head/>
 <body>
+
   <ol>
   {{range .Wifis}}
     <li>{{.ESSID}}</li>

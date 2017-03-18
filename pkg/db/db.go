@@ -77,3 +77,23 @@ func ListSessions() (sessions []Session, err error) {
 	})
 	return sessions, err
 }
+
+func ClearSessions() (err error) {
+	if err := Connect(); err != nil {
+		return err
+	}
+	defer db.Close()
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(Sessions))
+		if b == nil {
+			return errors.New("bucket not found")
+		}
+
+		err := b.ForEach(func(k, v []byte) error {
+			return b.Delete(k)
+		})
+		return err
+	})
+	return
+}
