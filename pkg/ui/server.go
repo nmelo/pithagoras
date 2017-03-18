@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 
 	"github.com/nmelo/pithagoras/pkg/db"
@@ -18,7 +17,7 @@ func Serve(ctx context.Context) {
 	fmt.Println("Serving UI...")
 
 	http.HandleFunc("/sessions", handleSessions)
-	go http.ListenAndServe(":8080", nil)
+	go http.ListenAndServe(":80", nil)
 
 	select {
 	case <-ctx.Done():
@@ -40,7 +39,7 @@ func handleSessions(w http.ResponseWriter, req *http.Request) {
 	}{
 		Sessions: sessions,
 	}); err != nil {
-		log.Print(err)
+		fmt.Println(err)
 		return
 	}
 

@@ -1,23 +1,20 @@
 package bluetooth
 
 import (
-	"fmt"
-
 	"context"
-
-	"log"
+	"fmt"
 
 	"github.com/paypal/gatt"
 	"github.com/paypal/gatt/examples/option"
 	"github.com/paypal/gatt/examples/service"
 )
 
-func Serve(ctx context.Context) error {
+func Serve(ctx context.Context) {
 	fmt.Println("Starting bluetooth service...")
 
 	d, err := gatt.NewDevice(option.DefaultServerOptions...)
 	if err != nil {
-		log.Printf("Failed to open device, err: %s", err)
+		fmt.Printf("Failed to open device, err: %s", err)
 		return
 	}
 
@@ -59,7 +56,7 @@ func Serve(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		fmt.Println("Stopping bluetooth...")
-		return nil
+		return
 	}
-	return nil
+	return
 }
