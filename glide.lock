@@ -1,14 +1,17 @@
-hash: fd39a9394bdee9539577140020d96169a7acfd0ed6441ae1bd2bb3f18943b3f7
-updated: 2017-03-12T18:51:48.580235713-04:00
+hash: debd1df23d09de33e1b8fadb71d709078235866f3ad0fa86cb2fca63a4d99257
+updated: 2017-03-18T18:56:17.407746907-04:00
 imports:
 - name: github.com/boltdb/bolt
   version: 583e8937c61f1af6513608ccc75c97b6abdf4ff9
 - name: github.com/op/go-logging
   version: b2cb9fa56473e98db8caba80237377e83fe44db5
-  repo: https://github.com/op/go-logging
+- name: github.com/Pallinder/go-randomdata
+  version: 21b99cb8cf82cc85e8fc96adb1dc2ef61b6d5c2a
 - name: github.com/paypal/gatt
   version: 4ae819d591cfc94c496c45deb55928469542beec
   subpackages:
+  - examples/option
+  - examples/service
   - linux
   - linux/cmd
   - linux/evt
@@ -18,7 +21,6 @@ imports:
   - xpc
 - name: github.com/skycoin/skycoin
   version: acede2ef5657d181d9b688911f5f63e75246ca61
-  repo: https://github.com/skycoin/skycoin
   subpackages:
   - src/aether/wifi
   - src/aether/wifi/linux
