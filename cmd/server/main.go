@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 
 	"github.com/nmelo/pithagoras/pkg/bluetooth"
 	"github.com/nmelo/pithagoras/pkg/session"
@@ -37,7 +38,9 @@ func main() {
 		return
 	}
 
-	go bluetooth.Serve(ctx)
+	if runtime.GOOS == "linux" {
+		go bluetooth.Serve(ctx)
+	}
 
 	go ui.Serve(ctx)
 
