@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/nmelo/pithagoras/pkg/db"
+	"github.com/nmelo/pithagoras/pkg/wifi"
+	"github.com/skycoin/skycoin/src/aether/wifi"
 )
 
 type Server struct {
@@ -17,6 +19,7 @@ func Serve(ctx context.Context) {
 	fmt.Println("Serving UI...")
 
 	http.HandleFunc("/sessions", handleSessions)
+	http.HandleFunc("/wifis", handleWifis)
 	go http.ListenAndServe(":80", nil)
 
 	select {
@@ -26,26 +29,7 @@ func Serve(ctx context.Context) {
 	}
 }
 
-func handleSessions(w http.ResponseWriter, req *http.Request) {
-
-	sessions, err := db.ListSessions()
-	if err != nil {
-		http.Error(w, "failed to read sessions", http.StatusInternalServerError)
-		return
-	}
-
-	if err := resultsTemplate.Execute(w, struct {
-		Sessions []db.Session
-	}{
-		Sessions: sessions,
-	}); err != nil {
-		fmt.Println(err)
-		return
-	}
-
-}
-
-var resultsTemplate = template.Must(template.New("sessions").Parse(`
+var sessionsTemplate = template.Must(template.New("sessions").Parse(`
 <html>
 <head/>
 <body>
@@ -57,3 +41,53 @@ var resultsTemplate = template.Must(template.New("sessions").Parse(`
 </body>
 </html>
 `))
+
+func handleSessions(w http.ResponseWriter, req *http.Request) {
+
+	sessions, err := db.ListSessions()
+	if err != nil {
+		http.Error(w, "failed to read sessions", http.StatusInternalServerError)
+		return
+	}
+
+	if err := sessionsTemplate.Execute(w, struct {
+		Sessions []db.Session
+	}{
+		Sessions: sessions,
+	}); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+}
+
+var wifisTemplate = template.Must(template.New("wifis").Parse(`
+<html>
+<head/>
+<body>
+  <ol>
+  {{range .Wifis}}
+    <li>{{.ESSID}}</li>
+  {{end}}
+  </ol>
+</body>
+</html>
+`))
+
+func handleWifis(w http.ResponseWriter, req *http.Request) {
+
+	nws, err := wifi.Scan()
+	if err != nil {
+		http.Error(w, "failed to scan", http.StatusInternalServerError)
+		return
+	}
+	if err := wifisTemplate.Execute(w, struct {
+		Wifis []network.WifiNetwork
+	}{
+		Wifis: nws,
+	}); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+}

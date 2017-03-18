@@ -1,24 +1,21 @@
 package wifi
 
 import (
-	"fmt"
-
 	"github.com/skycoin/skycoin/src/aether/wifi"
 )
 
-func PrintList() {
+func Scan() (networks []network.WifiNetwork, err error) {
+	networks = []network.WifiNetwork{}
 	ifaces, err := network.NewWifiInterfaces()
 	if err != nil {
-		fmt.Printf("getting interfaces: %s", err)
+		return
 	}
 	for _, v := range ifaces {
-		fmt.Println(v.Name)
-		wn, err := v.Scan()
+		nw, err := v.Scan()
 		if err != nil {
-			fmt.Println(err)
+			return nil, err
 		}
-		for _, n := range wn {
-			fmt.Println("Network: ", n.ESSID)
-		}
+		networks = append(networks, nw...)
 	}
+	return
 }

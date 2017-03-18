@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/nmelo/pithagoras/pkg/bluetooth"
 	"github.com/nmelo/pithagoras/pkg/session"
 	"github.com/nmelo/pithagoras/pkg/ui"
 )
@@ -37,7 +36,7 @@ func main() {
 		return
 	}
 
-	go bluetooth.Serve(ctx)
+	//go bluetooth.Serve(ctx)
 
 	go ui.Serve(ctx)
 
